@@ -3,12 +3,14 @@
 \contentsline {subsection}{\numberline {2.1}Initial Bounds}{2}{subsection.2.1}%
 \contentsline {subsection}{\numberline {2.2}SLH-DSA Parameters}{2}{subsection.2.2}%
 \contentsline {paragraph}{Hyper-Tree Geometry ($h$ and $d$).}{2}{section*.2}%
-\contentsline {paragraph}{Few-Time Signature Layer ($k$ and $a$).}{2}{section*.3}%
+\contentsline {paragraph}{Few-Time Signature Layer ($k$ and $a$).}{3}{section*.3}%
 \contentsline {paragraph}{One-Time Signature Base ($w$).}{3}{section*.4}%
 \contentsline {section}{\numberline {3}Search Methodology}{3}{section.3}%
 \contentsline {subsection}{\numberline {3.1}Initial Search Conditions}{3}{subsection.3.1}%
 \contentsline {subsection}{\numberline {3.2}Toolset}{3}{subsection.3.2}%
-\contentsline {subsection}{\numberline {3.3}Sweep Strategy}{3}{subsection.3.3}%
-\contentsline {subsubsection}{\numberline {3.3.1}Case 1: Best In Class}{4}{subsubsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.3}Sweep Strategy}{4}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.1}Case 1: Best in Class}{4}{subsubsection.3.3.1}%
 \contentsline {subsubsection}{\numberline {3.3.2}Case 2: Balanced Metrics}{4}{subsubsection.3.3.2}%
-\contentsline {paragraph}{Optimal Search Strategy}{5}{section*.8}%
+\contentsline {subsubsection}{\numberline {3.3.3}Case 3: Adaptive Search}{4}{subsubsection.3.3.3}%
+\contentsline {subsection}{\numberline {3.4}Decisional Weights}{7}{subsection.3.4}%
+\contentsline {section}{\numberline {4}Recommended Candidate Tuple}{9}{section.4}%
