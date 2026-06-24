@@ -37,7 +37,7 @@ load(os.path.join(_dir, "security.sage"))
 
 hashbytes = 16  # 16 bytes = 128 bits
 counter_size = 4 # 4 bytes = 32 bits
-randomness_size = 32  # 32 bytes = 256 bits
+randomness_size = 16  # 16 bytes = 128 bits
 
 # Compression function calls per hash operation
 # SHA-256 block size = 512 bits, with 65 bits for padding/length
@@ -142,6 +142,25 @@ def compute_wots_l(scheme, w):
         return l1 + l2
     else:
         return hashbytes*8//log(w,2)
+
+def compute_wots_tw_worst_steps(l1, l2, w):
+    """
+    Worst-case WOTS-TW verification steps per hypertree layer.
+
+    Worst case: all l1 message digits = 0, so the verifier traverses w-1
+    steps on every message chain. The checksum C = l1*(w-1) is then encoded
+    in base w as l2 digits c_j; the verifier traverses w-1-c_j steps on each
+    checksum chain. Total = l1*(w-1) + l2*(w-1) - digit_sum(C, w).
+
+    This is the correct model for WOTS-TW. The old average-case formula
+    (w-1)*l/2 was only valid for WOTS+C where chains sum to a constant.
+    """
+    C = l1 * (w - 1)
+    ds, rem = 0, int(C)
+    while rem > 0:
+        ds += rem % int(w)
+        rem //= int(w)
+    return int(l1) * (int(w) - 1) + int(l2) * (int(w) - 1) - ds
 
 def compute_nu(l: int, paramsum: int, w: int) -> int:
     """
