@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHRINCS Stateful Comparison</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦐</text></svg>">
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --border: #e5e5e0;
+    --text: #1a1a1a;
+    --text-soft: #6b6b6b;
+    --text-mute: #9a9a92;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --good: #16a34a;
+    --good-soft: #dcfce7;
+    --warn: #d97706;
+    --bad: #dc2626;
+    --bad-soft: #fee2e2;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  body { padding: 24px; }
+  header { max-width: 1280px; margin: 0 auto 20px; }
+  .breadcrumb { font-size: 13px; color: var(--text-soft); margin-bottom: 8px; }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .tagline { color: var(--text-soft); margin: 0; font-size: 14px; }
+
+  main { max-width: 1280px; margin: 0 auto; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .panel + .panel { margin-top: 16px; }
+  .panel h2 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-soft); font-weight: 600; }
+  .panel .hint { margin: 0 0 12px; color: var(--text-mute); font-size: 12px; }
+
+  /* Comparison table */
+  .compare-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+  table.compare {
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+    min-width: 100%;
+  }
+  table.compare th, table.compare td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+  table.compare thead th {
+    color: var(--text-soft);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
+  }
+  /* First column: candidate name */
+  table.compare th.cand-col, table.compare td.cand-col {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: var(--panel);
+    z-index: 2;
+    border-right: 1px solid var(--border);
+    min-width: 180px;
+  }
+  table.compare thead th.cand-col { background: var(--bg); }
+  .cand-title { font-size: 12px; font-weight: 600; display: block; color: var(--text); }
+  .cand-sub { font-size: 10px; color: var(--text-soft); font-weight: 400; display: block; margin-top: 1px; }
+  /* Last column: actions */
+  table.compare th.act-col, table.compare td.act-col {
+    text-align: center;
+    width: 40px;
+    min-width: 40px;
+  }
+  .row-remove {
+    background: transparent; border: none; color: var(--text-mute);
+    cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .row-remove:hover { background: var(--bad-soft); color: var(--bad); }
+  /* Baseline row visual emphasis */
+  table.compare tr.baseline td { background: var(--accent-soft); }
+  table.compare tr.baseline td.cand-col { background: var(--accent-soft); }
+  table.compare tr:not(.baseline):hover td { background: var(--bg); }
+  table.compare tr:not(.baseline):hover td.cand-col { background: var(--bg); }
+  .ratio { font-size: 10px; color: var(--text-mute); display: block; margin-top: 1px; }
+  .ratio.gain { color: var(--good); }
+  .ratio.regress { color: var(--bad); }
+
+  /* Add candidate panel */
+  .actions { margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    padding: 6px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .btn:hover { filter: brightness(1.05); }
+  .btn.btn-ghost { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+  .btn.btn-ghost:hover { background: var(--accent-soft); color: var(--accent); }
+
+  .add-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    align-items: end;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-top: 10px;
+  }
+  .add-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-soft); font-family: var(--mono); }
+  .add-form select, .add-form input {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--panel);
+  }
+  .add-form select:focus, .add-form input:focus { outline: none; border-color: var(--accent); }
+  .add-form .add-form-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+  .add-form .form-error {
+    grid-column: 1 / -1;
+    background: var(--bad-soft);
+    color: var(--bad);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  /* Sweep filter grid (lower panel) */
+  .filter-section { margin-bottom: 10px; }
+  .filter-section:last-of-type { margin-bottom: 12px; }
+  .filter-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-soft);
+    margin-bottom: 6px;
+  }
+  .filter-section-hint {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    color: var(--text-mute);
+    margin-left: 6px;
+    font-size: 11px;
+  }
+  /* Collapsible <details> for the Weights subsection */
+  details.filter-collapsible > summary {
+    cursor: pointer;
+    list-style: none;            /* remove the default disclosure triangle */
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 2px 0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  details.filter-collapsible > summary::-webkit-details-marker { display: none; }
+  details.filter-collapsible > summary:hover { color: var(--accent); }
+  details.filter-collapsible > summary .chev {
+    display: inline-block;
+    transition: transform 0.15s ease;
+    font-size: 9px;
+    color: var(--text-mute);
+  }
+  details.filter-collapsible[open] > summary .chev {
+    transform: rotate(90deg);
+  }
+  details.filter-collapsible[open] > .filter-grid {
+    margin-top: 4px;
+  }
+  .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .filter-grid .ctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .filter-grid .ctrl label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .filter-grid .ctrl label .name { color: var(--text-soft); }
+  .filter-grid .ctrl label .val {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--accent);
+    font-weight: 600;
+    font-family: var(--mono);
+    width: 60px;
+    text-align: right;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+    -moz-appearance: textfield;
+  }
+  .filter-grid .ctrl label .val:hover { border-color: var(--border); }
+  .filter-grid .ctrl label .val:focus { outline: none; border-color: var(--accent); background: var(--accent-soft); }
+  .filter-grid .ctrl label .val::-webkit-inner-spin-button,
+  .filter-grid .ctrl label .val::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .filter-grid .ctrl input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  .sweep-info {
+    color: var(--text-soft);
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .sweep-info strong { color: var(--text); }
+
+  /* Clickable sort headers in the sweep table */
+  table.compare th.sortable {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  table.compare th.sortable:hover { color: var(--accent); }
+  table.compare th.sortable.active { color: var(--accent); }
+  .sort-arrow {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 10px;
+    opacity: 0.7;
+  }
+
+  /* Compact "add to comparison" button used inside sweep rows */
+  .row-add {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-soft);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+  .row-add:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .row-add:disabled { opacity: 0.4; cursor: not-allowed; }
+  .row-add:disabled:hover { background: transparent; color: var(--text-soft); border-color: var(--border); }
+
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    h1 { font-size: 18px; }
+    .panel { padding: 12px; }
+    table.compare th, table.compare td { padding: 6px 8px; font-size: 11px; }
+    .col-title { font-size: 11px; }
+    .col-sub { font-size: 9px; }
+    .legend { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="breadcrumb"><a href="index.html">← Parameter Explorer</a></div>
+  <h1>Stateful Scheme Comparison</h1>
+  <p class="tagline">
+    Comparison of stateful signature candidates. You can add and compare your own by clicking <strong>+ Add candidate</strong>.
+  </p>
+</header>
+
+<main>
+
+  <div class="panel">
+    <div class="actions">
+      <button class="btn" id="show-add">+ Add candidate</button>
+      <button class="btn btn-ghost" id="reset-defaults">Reset to defaults</button>
+    </div>
+
+    <form class="add-form" id="add-form" hidden>
+      <label>Scheme
+        <select id="f-scheme">
+          <option value="xmssmt">XMSS / XMSS-MT</option>
+          <option value="uxmss">UXMSS (right-skewed)</option>
+        </select>
+      </label>
+      <label>OTS family
+        <select id="f-ots">
+          <option value="TW">WOTS</option>
+          <option value="WC">WOTS+C</option>
+        </select>
+      </label>
+      <label data-scheme="xmssmt">Tree height (h)
+        <input type="number" id="f-h" value="20" min="2" max="60" step="1">
+      </label>
+      <label data-scheme="xmssmt">Layers (d)
+        <select id="f-d"></select>
+      </label>
+      <label>Winternitz w
+        <select id="f-w">
+          <option>16</option>
+          <option>32</option>
+          <option>256</option>
+        </select>
+      </label>
+      <div class="form-error" id="f-error" hidden></div>
+      <div class="add-form-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-add">Cancel</button>
+        <button type="submit" class="btn">Add to comparison</button>
+      </div>
+    </form>
+
+    <h2 style="margin-top: 20px;">Comparison table</h2>
+    <p class="hint">All cost columns are SHA-256 compression-function calls. Cost ratios under each value compare against SLH-DSA-128s.</p>
+    <div class="compare-wrap">
+      <table class="compare" id="compare-table"></table>
+    </div>
+  </div>
+
+  <div class="panel" id="all-candidates-panel">
+    <h2>All stateful candidates</h2>
+    <p class="hint">
+      Pre-swept over h = [10, 40], d = [1, 10] (with d ⏐ h), OTS = {WOTS, WOTS+C}, w = {16, 32, 256},
+      plus the 6 UXMSS variants (2 OTS * 3 w). Every candidate has signature size strictly smaller than SLH-DSA-128s.
+      Tighten the bounds to narrow the pool; click a row's <strong>+</strong> to add it to the comparison above.
+    </p>
+
+    <div class="filter-section">
+      <div class="filter-section-label">Bounds — restrict which candidates appear</div>
+      <div class="filter-grid" id="sweep-bounds"></div>
+    </div>
+    <details class="filter-section filter-collapsible">
+      <summary class="filter-section-label">
+        <span class="chev">▸</span>
+        Weights
+        <span class="filter-section-hint">(advanced)</span>
+      </summary>
+      <div class="filter-grid" id="sweep-weights"></div>
+    </details>
+
+    <div class="sweep-info" id="sweep-info"></div>
+
+    <div class="compare-wrap">
+      <table class="compare" id="sweep-table"></table>
+    </div>
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+// Constants from costs.sage / stateful.sage
+const N = 16;                 // hashbytes
+const C_SIZE = 4;             // counter_size (WOTS+C grinding counter)
+const R_SIZE = 32;            // randomness_size
+const C_Th1 = 1;
+const C_Th1c = 1;
+const C_Th2 = 2;
+const C_Hmsg = 2;
+const C_PRFmsg = 2;
+const C_PRF = 1;
+
+// WOTS+C target chain sums S_wn
+const WOTS_C_SWN = { 16: 240, 32: 403, 256: 2040 };
+const UXMSS_TARGET_SIZE = 5712;     // Candidate 2 reference
+
+// SLH-DSA-128s baseline
+const SLH = { h: 63, d: 7, k: 14, a: 12, w: 16 };
+
+//  Helpers 
+function idxBytes(h) { return Math.max(1, Math.ceil(h / 8)); }
+function computeTh(n) { return Math.ceil((128 + 96 + 128 * n + 65) / 512); }
+
+//  WOTS+ family 
+function wotsL(w, ots) {
+  const l1 = Math.ceil(8 * N / Math.log2(w));
+  if (ots === 'WC') return l1;
+  const l2 = Math.ceil(Math.log2(l1 * (w - 1)) / Math.log2(w));
+  return l1 + l2;
+}
+
+function wotsThl(l, ots) {
+  if (ots === 'classic') return Math.ceil((128 * l + 65) / 512);
+  return computeTh(l);
+}
+
+function wotsPkC(w, ots) {
+  const l = wotsL(w, ots);
+  return l * C_PRF + l * (w - 1) * C_Th1 + wotsThl(l, ots);
+}
+
+// BigInt binomial, used inside compute_nu for WOTS+C grinding cost
+function binomBig(n, k) {
+  if (k < 0n || k > n) return 0n;
+  if (k === 0n || k === n) return 1n;
+  if (k > n - k) k = n - k;
+  let num = 1n, den = 1n;
+  for (let i = 0n; i < k; i++) { num *= (n - i); den *= (i + 1n); }
+  return num / den;
+}
+
+function computeNu(l, swn, w) {
+  const lB = BigInt(l), swnB = BigInt(swn), wB = BigInt(w);
+  let nu = 0n;
+  for (let j = 0n; j <= lB; j++) {
+    const sign = (j % 2n === 0n) ? 1n : -1n;
+    const b1 = binomBig(lB, j);
+    const nVal = (swnB + lB) - j * wB - 1n;
+    let b2 = 0n;
+    if (nVal >= lB - 1n && lB > 0n) b2 = binomBig(nVal, lB - 1n);
+    nu += sign * b1 * b2;
+  }
+  return nu > 0n ? nu : 1n;
+}
+
+function wotsSignC(w, swn, ots) {
+  const l = wotsL(w, ots);
+  if (ots === 'WC') {
+    const Thl = wotsThl(l, ots);
+    const nu = computeNu(l, swn, w);
+    const wToL = BigInt(w) ** BigInt(l);
+    const searchBig = wToL / nu + ((wToL % nu === 0n) ? 0n : 1n);
+    const search = Number(searchBig);   // typically small, fits in double
+    return search * C_Th1c + l * C_PRF + swn * C_Th1 + Thl;
+  }
+  return l * C_PRF + Math.floor(l * (w - 1) / 2) * C_Th1;
+}
+
+function wotsVerifyWorstSteps(w) {
+  const l1 = Math.ceil(8 * N / Math.log2(w));
+  const l2 = Math.ceil(Math.log2(l1 * (w - 1)) / Math.log2(w));
+  const C = l1 * (w - 1);
+  let ds = 0, rem = C;
+  while (rem > 0) { ds += rem % w; rem = Math.floor(rem / w); }
+  return l1 * (w - 1) + l2 * (w - 1) - ds;
+}
+
+function wotsVerifyC(w, swn, ots, worstCase) {
+  const l = wotsL(w, ots);
+  const Thl = wotsThl(l, ots);
+  if (ots === 'WC') return ((w - 1) * l - swn) * C_Th1 + C_Th1c + Thl;
+  if (worstCase) return wotsVerifyWorstSteps(w) * C_Th1 + Thl;
+  return Math.floor(l * (w - 1) / 2) * C_Th1 + Thl;
+}
+
+//  Tree helpers
+function treeSizePerLayer(hPrime, w, ots) {
+  const l = wotsL(w, ots);
+  const ctr = (ots === 'WC') ? C_SIZE : 0;
+  return hPrime * N + l * N + ctr;
+}
+function treeKeygenC(hPrime, w, ots) {
+  // 2^h' WOTS keypairs + 2^h' − 1 internal hashes
+  const pk = wotsPkC(w, ots);
+  const sz = Math.pow(2, hPrime);
+  return sz * pk + (sz - 1) * C_Th2;
+}
+function treeSignBdsC(hPrime, w, swn, ots) {
+  // BDS amortised: 1 WOTS sig + h' WOTS PK + h' tree hashes per signature
+  const pk = wotsPkC(w, ots);
+  const cSg = wotsSignC(w, swn, ots);
+  return C_Hmsg + C_PRFmsg + cSg + hPrime * pk + hPrime * C_Th2;
+}
+function treeVerifyC(hPrime, w, swn, ots, worstCase) {
+  return wotsVerifyC(w, swn, ots, worstCase) + hPrime * C_Th2;
+}
+
+//  XMSS / XMSS-MT 
+function xmssMtSize(h, d, w, ots) {
+  const hPrime = h / d;
+  return R_SIZE + d * treeSizePerLayer(hPrime, w, ots) + idxBytes(h);
+}
+function xmssMtKeygenC(h, d, w, ots) {
+  // Build only the top tree (others are derived during signing).
+  return treeKeygenC(h / d, w, ots);
+}
+function xmssMtSignBdsC(h, d, w, swn, ots) {
+  const hPrime = h / d;
+  const pk = wotsPkC(w, ots);
+  const cSg = wotsSignC(w, swn, ots);
+  return C_Hmsg + C_PRFmsg + cSg + d * (hPrime * pk + hPrime * C_Th2);
+}
+function xmssMtVerifyC(h, d, w, swn, ots, worstCase) {
+  return C_Hmsg + d * treeVerifyC(h / d, w, swn, ots, worstCase);
+}
+
+//  UXMSS (right-skewed) 
+function uxmssIdxBytes(hsf) {
+  if (hsf <= 0) return 1;
+  return Math.max(1, Math.ceil(Math.log2(hsf + 1) / 8));
+}
+function findMaxHsf(w, ots, targetSize) {
+  const l = wotsL(w, ots);
+  const ctr = (ots === 'WC') ? C_SIZE : 0;
+  let hsf = 0;
+  for (let i = 0; i < 64; i++) {
+    const idx = uxmssIdxBytes(hsf);
+    const avail = targetSize - 1 - R_SIZE - ctr - l * N - idx;
+    const newHsf = Math.max(0, Math.floor(avail / N));
+    if (newHsf === hsf) return hsf;
+    hsf = newHsf;
+  }
+  return hsf;
+}
+function uxmssSize(q, hsf, w, ots) {
+  const l = wotsL(w, ots);
+  const ctr = (ots === 'WC') ? C_SIZE : 0;
+  return R_SIZE + ctr + l * N + Math.min(q, hsf) * N + uxmssIdxBytes(hsf);
+}
+function uxmssKeygenC(hsf, w, ots) {
+  return (hsf + 1) * wotsPkC(w, ots) + hsf * C_Th2;
+}
+function uxmssSignC(w, swn, ots) {
+  return C_Hmsg + C_PRFmsg + wotsSignC(w, swn, ots);
+}
+function uxmssVerifyC(q, hsf, w, swn, ots, worstCase) {
+  return C_Hmsg + wotsVerifyC(w, swn, ots, worstCase) + Math.min(q, hsf) * C_Th2;
+}
+
+//  SLH-DSA (stateless, FORS + WOTS-TW + hyper-tree)
+// Calibrated to match the report's baseline exactly (same fudge factors as index.html).
+const SLH_FUDGE = { kg: 1.0875, sg: 1.1734, sv: 1.1540 };
+function slhWotsLen(w) {
+  const l1 = Math.ceil(8 * N / Math.log2(w));
+  const l2 = Math.floor(Math.log2(l1 * (w - 1)) / Math.log2(w)) + 1;
+  return l1 + l2;
+}
+function slhMetrics(p) {
+  const hp = p.h / p.d, len = slhWotsLen(p.w);
+  const size = N * (2 + p.k * (p.a + 1) + p.h + p.d * len);
+  const kg = Math.pow(2, hp) * (len * (p.w - 1) + 1) * SLH_FUDGE.kg;
+  const sg = (p.k * Math.pow(2, p.a) + p.d * Math.pow(2, hp) * (len * (p.w - 1) + 1)) * SLH_FUDGE.sg;
+  const sv = (p.k * p.a + p.h + p.d * len * (p.w - 1) / 2) * SLH_FUDGE.sv;
+  return { size, kg, sg, sv, svWorst: sv };  // SLH-DSA model doesn't distinguish worst vs avg
+}
+
+// Candidate builder 
+// Each candidate has { id, label, sub, scheme, params, metrics }
+let nextId = 1;
+function makeId() { return 'c' + (nextId++); }
+
+function otsShort(ots) { return ots === 'WC' ? 'WOTS+C' : 'WOTS'; }
+
+function buildSLH() {
+  const m = slhMetrics(SLH);
+  return {
+    id: makeId(),
+    label: 'SLH-DSA-128s',
+    scheme: 'SLH-DSA',
+    canRemove: false,
+    metrics: {
+      size: m.size,
+      keygen: m.kg,
+      siggen: m.sg,
+      sigver: m.sv,
+      sigverWorst: m.svWorst,
+      qsLog2: 40,
+      qsExact: null,
+    },
+  };
+}
+
+function buildXmssMt(ots, h, d, w) {
+  const swn = (ots === 'WC') ? WOTS_C_SWN[w] : 0;
+  return {
+    id: makeId(),
+    label: `XMSS-2^${h} (${otsShort(ots)}, w=${w}, d=${d})`,
+    scheme: d > 1 ? 'XMSS-MT' : 'XMSS',
+    canRemove: true,
+    metrics: {
+      size: xmssMtSize(h, d, w, ots),
+      keygen: xmssMtKeygenC(h, d, w, ots),
+      siggen: xmssMtSignBdsC(h, d, w, swn, ots),
+      sigver: xmssMtVerifyC(h, d, w, swn, ots, false),
+      sigverWorst: xmssMtVerifyC(h, d, w, swn, ots, true),
+      qsLog2: h,
+      qsExact: null,
+    },
+  };
+}
+
+function buildUxmss(ots, w) {
+  const swn = (ots === 'WC') ? WOTS_C_SWN[w] : 0;
+  const hsf = findMaxHsf(w, ots, UXMSS_TARGET_SIZE);
+  return {
+    id: makeId(),
+    label: `UXMSS (${otsShort(ots)}, w=${w})`,
+    scheme: 'UXMSS',
+    canRemove: true,
+    hsf,
+    metrics: {
+      size: uxmssSize(1, hsf, w, ots),
+      keygen: uxmssKeygenC(hsf, w, ots),
+      siggen: uxmssSignC(w, swn, ots),
+      sigver: uxmssVerifyC(1, hsf, w, swn, ots, false),
+      sigverWorst: uxmssVerifyC(1, hsf, w, swn, ots, true),
+      qsLog2: null,
+      qsExact: hsf + 1,
+    },
+  };
+}
+
+//  Defaults 
+function defaultCandidates() {
+  return [
+    buildSLH(),
+    buildUxmss('TW', 16),
+    buildUxmss('WC', 16),
+    buildXmssMt('TW', 10, 1, 16),
+    buildXmssMt('WC', 10, 1, 16),
+    buildXmssMt('TW', 20, 1, 16),
+    buildXmssMt('WC', 20, 1, 16),
+  ];
+}
+
+//  Formatting 
+function fmtBytes(n) { return n.toLocaleString() + ' B'; }
+function fmtCompressions(n) {
+  if (!isFinite(n)) return '—';
+  if (n >= 1e15) return n.toExponential(2);
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+  if (n >= 1e9)  return (n / 1e9).toFixed(2) + 'G';
+  if (n >= 1e6)  return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3)  return (n / 1e3).toFixed(1) + 'K';
+  return Math.round(n).toLocaleString();
+}
+function fmtRatio(target, std) {
+  if (target === std) return '';
+  if (!isFinite(target) || !isFinite(std)) return '';
+  const r = target / std;
+  if (r >= 100) return `${r.toExponential(1)}×`;
+  if (r >= 10)  return `${r.toFixed(1)}×`;
+  return `${r.toFixed(2)}×`;
+}
+function fmtCpb(n) { return n.toFixed(3); }
+function fmtQs(c) {
+  if (c.qsLog2 !== null) return `2^${c.qsLog2}`;
+  return c.qsExact.toLocaleString();
+}
+
+//  State 
+const state = { candidates: defaultCandidates() };
+
+// Render 
+// Metric column descriptors
+const METRIC_COLS = [
+  { label: 'Sig size',    value: m => fmtBytes(m.size),                            ratioField: 'size',    lowerIsBetter: true },
+  { label: 'KeyGen (C)',  value: m => fmtCompressions(m.keygen),                   ratioField: 'keygen',  lowerIsBetter: true },
+  { label: 'SigGen (C)',  value: m => fmtCompressions(m.siggen),                   ratioField: 'siggen',  lowerIsBetter: true },
+  { label: 'SigVer (C)',  value: m => fmtCompressions(m.sigver),                   ratioField: 'sigver',  lowerIsBetter: true },
+  { label: 'C/B (avg)',   value: m => fmtCpb(m.sigver / m.size),                   ratioFn: m => (m.sigver      / m.size),  lowerIsBetter: true },
+  { label: 'C/B (worst)', value: m => fmtCpb(m.sigverWorst / m.size),              ratioFn: m => (m.sigverWorst / m.size),  lowerIsBetter: true },
+  { label: 'q_s',         value: (_, c) => fmtQs(c.metrics) },
+];
+
+function ratioClass(ratio, lowerIsBetter) {
+  if (ratio === 1) return '';
+  if (lowerIsBetter) return ratio < 0.95 ? 'gain' : (ratio > 1.05 ? 'regress' : '');
+  return ratio > 1.05 ? 'gain' : (ratio < 0.95 ? 'regress' : '');
+}
+
+function renderComparison() {
+  const std = state.candidates[0].metrics;   // SLH-DSA-128s is always [0]
+  const table = document.getElementById('compare-table');
+
+  // Header: candidate column + one column per metric + actions
+  const thead = document.createElement('thead');
+  let hr = '<tr><th class="cand-col">Candidate</th>';
+  for (const col of METRIC_COLS) hr += `<th>${col.label}</th>`;
+  hr += '<th class="act-col"></th></tr>';
+  thead.innerHTML = hr;
+
+  // Body: one row per candidate
+  const tbody = document.createElement('tbody');
+  for (let i = 0; i < state.candidates.length; i++) {
+    const c = state.candidates[i];
+    const m = c.metrics;
+    const isStd = (i === 0);
+
+    let row = `<tr class="${isStd ? 'baseline' : ''}">`;
+    row += `<td class="cand-col"><span class="cand-title">${c.label}</span></td>`;
+
+    for (const col of METRIC_COLS) {
+      let cell = col.value(m, c);
+      if (!isStd) {
+        let target = null, stdVal = null;
+        if (col.ratioField) {
+          target = m[col.ratioField];
+          stdVal = std[col.ratioField];
+        } else if (col.ratioFn) {
+          target = col.ratioFn(m);
+          stdVal = col.ratioFn(std);
+        }
+        if (target !== null && isFinite(target) && isFinite(stdVal) && stdVal > 0) {
+          const ratio = target / stdVal;
+          const cls = ratioClass(ratio, col.lowerIsBetter);
+          cell += `<span class="ratio ${cls}">${fmtRatio(target, stdVal)}</span>`;
+        }
+      }
+      row += `<td>${cell}</td>`;
+    }
+
+    // Action cell - remove button (baseline shows nothing)
+    if (c.canRemove) {
+      row += `<td class="act-col"><button class="row-remove" data-id="${c.id}" title="Remove this candidate">×</button></td>`;
+    } else {
+      row += `<td class="act-col"></td>`;
+    }
+    row += '</tr>';
+    tbody.innerHTML += row;
+  }
+
+  table.innerHTML = '';
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  // Wire remove buttons
+  table.querySelectorAll('.row-remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const id = e.target.dataset.id;
+      state.candidates = state.candidates.filter(c => c.id !== id);
+      render();
+    });
+  });
+}
+
+// Sweep panel
+const SWEEP_FACTORIES = [];
+
+function buildSweepPool() {
+  const stdSize = state.candidates[0].metrics.size;  // SLH-DSA-128s size
+  const otsList = ['TW', 'WC'];
+  const wList = [16, 32, 256];
+
+  // XMSS / XMSS-MT sweep
+  for (const ots of otsList) {
+    for (const w of wList) {
+      for (let h = 10; h <= 40; h++) {
+        for (let d = 1; d <= 10; d++) {
+          if (h % d !== 0) continue;
+          const c = buildXmssMt(ots, h, d, w);
+          if (c.metrics.size >= stdSize) continue;  // must beat SLH-DSA size
+          SWEEP_FACTORIES.push({
+            key: `xmssmt-${ots}-${w}-${h}-${d}`,
+            factory: () => buildXmssMt(ots, h, d, w),
+            cached: c,
+          });
+        }
+      }
+    }
+  }
+
+  // UXMSS sweep
+  for (const ots of otsList) {
+    for (const w of wList) {
+      const c = buildUxmss(ots, w);
+      if (c.metrics.size <= 0 || c.metrics.size >= stdSize) continue;
+      SWEEP_FACTORIES.push({
+        key: `uxmss-${ots}-${w}`,
+        factory: () => buildUxmss(ots, w),
+        cached: c,
+      });
+    }
+  }
+}
+
+// Sweep filter coefficients
+const SWEEP_DEFAULTS_X = { size: 1.00, kg: 20.00, sg: 20.00, sv: 20.00, cb: 20.00, minQs: 0 };
+const SWEEP_DEFAULTS_W = { size: 1.0,  kg: 1.0,   sg: 1.0,   sv: 1.0,   cb: 1.0   };
+const sweepState = {
+  X: { ...SWEEP_DEFAULTS_X },
+  W: { ...SWEEP_DEFAULTS_W },
+  sort: { col: 'distance', dir: 'asc' },
+};
+
+// Bound coefficient descriptors
+const SWEEP_BOUND_FILTERS = [
+  { key: 'size',  label: 'X_size',         min: 0.10, max: 1.00,  step: 0.01, dp: 2 },
+  { key: 'kg',    label: 'X_kg',           min: 0.10, max: 20.00, step: 0.10, dp: 2 },
+  { key: 'sg',    label: 'X_sg',           min: 0.10, max: 20.00, step: 0.10, dp: 2 },
+  { key: 'sv',    label: 'X_sv',           min: 0.10, max: 20.00, step: 0.10, dp: 2 },
+  { key: 'cb',    label: 'X_cb',           min: 0.10, max: 20.00, step: 0.10, dp: 2 },
+  { key: 'minQs', label: 'Min sigs (2^h)', min: 0,    max: 40,    step: 1,    dp: 0 },
+];
+// Importance-weight descriptors (W)
+const SWEEP_WEIGHT_FILTERS = [
+  { key: 'size', label: 'w_size', min: 0.10, max: 10.00, step: 0.10, dp: 1 },
+  { key: 'kg',   label: 'w_kg',   min: 0.10, max: 10.00, step: 0.10, dp: 1 },
+  { key: 'sg',   label: 'w_sg',   min: 0.10, max: 10.00, step: 0.10, dp: 1 },
+  { key: 'sv',   label: 'w_sv',   min: 0.10, max: 10.00, step: 0.10, dp: 1 },
+  { key: 'cb',   label: 'w_cb',   min: 0.10, max: 10.00, step: 0.10, dp: 1 },
+];
+
+// Weighted Euclidean distance
+function sweepDistance(m, std, W) {
+  const sum = W.size + W.kg + W.sg + W.sv + W.cb;
+  const p = {
+    size: W.size / sum, kg: W.kg / sum, sg: W.sg / sum, sv: W.sv / sum, cb: W.cb / sum
+  };
+  const cbT = m.sigver / m.size;
+  const cbS = std.sigver / std.size;
+  const X = {
+    size: m.size / std.size,
+    kg:   m.keygen / std.keygen,
+    sg:   m.siggen / std.siggen,
+    sv:   m.sigver / std.sigver,
+    cb:   cbT / cbS,
+  };
+  return Math.sqrt(
+    p.size * X.size * X.size +
+    p.kg   * X.kg   * X.kg   +
+    p.sg   * X.sg   * X.sg   +
+    p.sv   * X.sv   * X.sv   +
+    p.cb   * X.cb   * X.cb
+  );
+}
+
+// Shared slider/number-input renderer
+function renderSweepFilterGroup(hostId, group, filters) {
+  const host = document.getElementById(hostId);
+  const store = sweepState[group];
+  host.innerHTML = filters.map(f => `
+    <div class="ctrl">
+      <label>
+        <span class="name">${f.label}</span>
+        <input type="number" class="val"
+               id="sw-${group}-${f.key}-val"
+               min="${f.min}" max="${f.max}" step="${f.step}"
+               value="${store[f.key].toFixed(f.dp)}"
+               data-sw-input="${f.key}" data-dp="${f.dp}">
+      </label>
+      <input type="range"
+             min="${f.min}" max="${f.max}" step="${f.step}"
+             value="${store[f.key]}" data-sw="${f.key}">
+    </div>
+  `).join('');
+
+  host.querySelectorAll('input[data-sw]').forEach(slider => {
+    slider.addEventListener('input', e => {
+      const key = e.target.dataset.sw;
+      const v = parseFloat(e.target.value);
+      store[key] = v;
+      const inp = host.querySelector(`input[data-sw-input="${key}"]`);
+      inp.value = v.toFixed(parseInt(inp.dataset.dp, 10));
+      renderSweepTable();
+    });
+  });
+  host.querySelectorAll('input[data-sw-input]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const key = e.target.dataset.swInput;
+      const raw = parseFloat(e.target.value);
+      if (!isFinite(raw)) return;
+      const min = parseFloat(e.target.min), max = parseFloat(e.target.max);
+      const v = Math.max(min, Math.min(max, raw));
+      store[key] = v;
+      host.querySelector(`input[data-sw="${key}"]`).value = v;
+      renderSweepTable();
+    });
+    inp.addEventListener('blur', e => {
+      const key = e.target.dataset.swInput;
+      const dp = parseInt(e.target.dataset.dp, 10);
+      e.target.value = store[key].toFixed(dp);
+    });
+  });
+}
+
+function renderSweepFilters() {
+  renderSweepFilterGroup('sweep-bounds',  'X', SWEEP_BOUND_FILTERS);
+  renderSweepFilterGroup('sweep-weights', 'W', SWEEP_WEIGHT_FILTERS);
+}
+
+// Sweep-table metric columns
+const SWEEP_COLS = [
+  { field: 'size',     label: 'Sig size',   value: m => fmtBytes(m.size),                       sortFn: (m) => m.size,                                                  ratioFn: m => m.size,             lowerIsBetter: true },
+  { field: 'keygen',   label: 'KeyGen (C)', value: m => fmtCompressions(m.keygen),              sortFn: (m) => m.keygen,                                                ratioFn: m => m.keygen,           lowerIsBetter: true },
+  { field: 'siggen',   label: 'SigGen (C)', value: m => fmtCompressions(m.siggen),              sortFn: (m) => m.siggen,                                                ratioFn: m => m.siggen,           lowerIsBetter: true },
+  { field: 'sigver',   label: 'SigVer (C)', value: m => fmtCompressions(m.sigver),              sortFn: (m) => m.sigver,                                                ratioFn: m => m.sigver,           lowerIsBetter: true },
+  { field: 'cb',       label: 'C/B (avg)',  value: m => fmtCpb(m.sigver / m.size),              sortFn: (m) => m.sigver / m.size,                                       ratioFn: m => m.sigver / m.size,  lowerIsBetter: true },
+  { field: 'distance', label: 'Distance',   value: (m, c, std) => sweepDistance(m, std, sweepState.W).toFixed(4),
+                                            sortFn: (m, c, std) => sweepDistance(m, std, sweepState.W) },
+  { field: 'qs',       label: 'q_s',        value: (_, c) => fmtQs(c.metrics),                  sortFn: (m) => (m.qsLog2 !== null ? Math.pow(2, m.qsLog2) : m.qsExact) },
+];
+
+function renderSweepTable() {
+  const std = state.candidates[0].metrics;
+  const minQsAbs = Math.pow(2, sweepState.X.minQs);
+  const survivors = [];
+  for (const f of SWEEP_FACTORIES) {
+    const m = f.cached.metrics;
+    if (m.size      >  sweepState.X.size * std.size)   continue;
+    if (m.keygen    >  sweepState.X.kg   * std.keygen) continue;
+    if (m.siggen    >  sweepState.X.sg   * std.siggen) continue;
+    if (m.sigver    >  sweepState.X.sv   * std.sigver) continue;
+    const cbTarget = m.sigver / m.size;
+    const cbStd    = std.sigver / std.size;
+    if (cbTarget   >  sweepState.X.cb   * cbStd)       continue;
+    // Capacity floor
+    const candQs = m.qsLog2 !== null ? Math.pow(2, m.qsLog2) : m.qsExact;
+    if (candQs < minQsAbs) continue;
+    survivors.push(f);
+  }
+  // Apply the user's selected sort
+  const sortCol = SWEEP_COLS.find(c => c.field === sweepState.sort.col) || SWEEP_COLS[0];
+  const sign = sweepState.sort.dir === 'asc' ? 1 : -1;
+  survivors.sort((a, b) => {
+    const av = sortCol.sortFn(a.cached.metrics, a.cached, std);
+    const bv = sortCol.sortFn(b.cached.metrics, b.cached, std);
+    if (av === bv) return 0;
+    return sign * (av < bv ? -1 : 1);
+  });
+
+  // Info strip
+  document.getElementById('sweep-info').innerHTML =
+    `<strong>${survivors.length}</strong> of ${SWEEP_FACTORIES.length} candidates pass the current bounds.`;
+
+  // Render table
+  const table = document.getElementById('sweep-table');
+  table.innerHTML = '';
+
+  if (survivors.length === 0) {
+    table.innerHTML = `<thead><tr><th class="cand-col" colspan="${SWEEP_COLS.length + 2}" style="text-align:center;color:var(--text-mute);font-style:italic;padding:24px;">No candidates pass. Relax a bound.</th></tr></thead>`;
+    return;
+  }
+
+  const thead = document.createElement('thead');
+  let hr = '<tr><th class="cand-col">Candidate</th>';
+  for (const col of SWEEP_COLS) {
+    const isActive = sweepState.sort.col === col.field;
+    const arrow = isActive ? (sweepState.sort.dir === 'asc' ? '▲' : '▼') : '';
+    hr += `<th class="sortable${isActive ? ' active' : ''}" data-sort="${col.field}">${col.label}<span class="sort-arrow">${arrow}</span></th>`;
+  }
+  hr += '<th class="act-col"></th></tr>';
+  thead.innerHTML = hr;
+
+  // Track which factories are already in the comparison to disable the add button
+  const inComparison = new Set();
+  for (const c of state.candidates) {
+    // Match by label since each factory yields a deterministic label
+    inComparison.add(c.label);
+  }
+
+  const tbody = document.createElement('tbody');
+  // Cap visible rows so very loose filters don't render thousands at once
+  const MAX_ROWS = 200;
+  const shown = survivors.slice(0, MAX_ROWS);
+  for (const f of shown) {
+    const c = f.cached;
+    const m = c.metrics;
+    let row = `<tr>`;
+    row += `<td class="cand-col"><span class="cand-title">${c.label}</span></td>`;
+    for (const col of SWEEP_COLS) {
+      let cell = col.value(m, c, std);
+      if (col.ratioFn) {
+        const target = col.ratioFn(m);
+        const stdVal = col.ratioFn(std);
+        if (isFinite(target) && isFinite(stdVal) && stdVal > 0) {
+          const ratio = target / stdVal;
+          const cls = ratioClass(ratio, col.lowerIsBetter);
+          cell += `<span class="ratio ${cls}">${fmtRatio(target, stdVal)}</span>`;
+        }
+      }
+      row += `<td>${cell}</td>`;
+    }
+    const disabled = inComparison.has(c.label) ? 'disabled' : '';
+    row += `<td class="act-col"><button class="row-add" data-key="${f.key}" ${disabled} title="${disabled ? 'Already in comparison' : 'Add to comparison'}">+</button></td>`;
+    row += '</tr>';
+    tbody.innerHTML += row;
+  }
+  if (survivors.length > MAX_ROWS) {
+    tbody.innerHTML += `<tr><td class="cand-col" colspan="${SWEEP_COLS.length + 2}" style="text-align:center;color:var(--text-mute);font-style:italic;">… and ${survivors.length - MAX_ROWS} more (tighten a bound to narrow further)</td></tr>`;
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  // Wire add buttons
+  table.querySelectorAll('.row-add').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const key = e.target.dataset.key;
+      const f = SWEEP_FACTORIES.find(x => x.key === key);
+      if (!f) return;
+      state.candidates.push(f.factory());
+      render();
+      renderSweepTable();   // refresh disabled state
+    });
+  });
+
+  // Wire column-sort handlers
+  table.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (sweepState.sort.col === col) {
+        sweepState.sort.dir = (sweepState.sort.dir === 'asc') ? 'desc' : 'asc';
+      } else {
+        sweepState.sort.col = col;
+        sweepState.sort.dir = 'asc';
+      }
+      renderSweepTable();
+    });
+  });
+}
+
+// Add form 
+function setupAddForm() {
+  const showBtn = document.getElementById('show-add');
+  const form = document.getElementById('add-form');
+  const cancelBtn = document.getElementById('cancel-add');
+  const schemeSel = document.getElementById('f-scheme');
+  const errBox = document.getElementById('f-error');
+
+  showBtn.addEventListener('click', () => {
+    form.hidden = false;
+    showBtn.hidden = true;
+    errBox.hidden = true;
+  });
+  cancelBtn.addEventListener('click', () => {
+    form.hidden = true;
+    showBtn.hidden = false;
+    errBox.hidden = true;
+  });
+
+  function updateVisibility() {
+    const scheme = schemeSel.value;
+    form.querySelectorAll('[data-scheme]').forEach(el => {
+      el.style.display = (el.dataset.scheme === scheme) ? '' : 'none';
+    });
+  }
+  schemeSel.addEventListener('change', updateVisibility);
+  updateVisibility();
+
+  // Populate the d-selector with only valid divisors of the current h
+  const hInput = document.getElementById('f-h');
+  const dSel   = document.getElementById('f-d');
+  function refreshDOptions() {
+    const h = parseInt(hInput.value, 10);
+    const prev = parseInt(dSel.value, 10);
+    dSel.innerHTML = '';
+    if (!Number.isInteger(h) || h < 2) return;
+    const divisors = [];
+    for (let d = 1; d <= h; d++) if (h % d === 0) divisors.push(d);
+    for (const d of divisors) {
+      const opt = document.createElement('option');
+      opt.value = String(d);
+      opt.textContent = `${d}  (h' = ${h / d})`;
+      dSel.appendChild(opt);
+    }
+    // Try to preserve the previous selection if it's still valid
+    if (divisors.includes(prev)) dSel.value = String(prev);
+    else dSel.value = String(divisors[0] || 1);
+  }
+  hInput.addEventListener('input', refreshDOptions);
+  refreshDOptions();
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    errBox.hidden = true;
+    const scheme = schemeSel.value;
+    const ots = document.getElementById('f-ots').value;
+    const w = parseInt(document.getElementById('f-w').value, 10);
+
+    try {
+      let cand;
+      if (scheme === 'xmssmt') {
+        const h = parseInt(document.getElementById('f-h').value, 10);
+        const d = parseInt(document.getElementById('f-d').value, 10);
+        if (!Number.isInteger(h) || h < 2 || h > 60) throw new Error(`h must be an integer in [2, 60] (got ${h}).`);
+        if (!Number.isInteger(d) || d < 1) throw new Error(`d must be a positive integer (got ${d}).`);
+        if (h % d !== 0) throw new Error(`d (${d}) must divide h (${h}) evenly. Got h/d = ${(h/d).toFixed(3)}.`);
+        cand = buildXmssMt(ots, h, d, w);
+      } else {
+        cand = buildUxmss(ots, w);
+        if (cand.metrics.size <= 0) throw new Error(`UXMSS budget too tight for ${ots}/w=${w}: no signature fits under ${UXMSS_TARGET_SIZE} B.`);
+      }
+      state.candidates.push(cand);
+      render();
+      form.hidden = true;
+      showBtn.hidden = false;
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.hidden = false;
+    }
+  });
+
+  document.getElementById('reset-defaults').addEventListener('click', () => {
+    state.candidates = defaultCandidates();
+    render();
+  });
+}
+
+// render() is the single entry point invoked by every UI handler that
+// mutates state candidates
+function render() {
+  renderComparison();
+  if (SWEEP_FACTORIES.length > 0) renderSweepTable();
+}
+
+//  Init 
+setupAddForm();
+render();              // initial pass paints the comparison
+buildSweepPool();      // sweep generation depends on the SLH baseline
+renderSweepFilters();
+renderSweepTable();    // first paint of the sweep table
+</script>
+
+</body>
+</html>
