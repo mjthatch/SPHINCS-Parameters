@@ -541,21 +541,40 @@ function uxmssVerifyC(q, hsf, w, swn, ots, worstCase) {
 }
 
 //  SLH-DSA (stateless, FORS + WOTS-TW + hyper-tree)
-// Calibrated to match the report's baseline exactly (same fudge factors as index.html).
-const SLH_FUDGE = { kg: 1.0875, sg: 1.1734, sv: 1.1540 };
-function slhWotsLen(w) {
-  const l1 = Math.ceil(8 * N / Math.log2(w));
-  const l2 = Math.floor(Math.log2(l1 * (w - 1)) / Math.log2(w)) + 1;
-  return l1 + l2;
-}
+// Exact compression-call model — same formulas as index.html metrics() and
+// costs.sage. Baseline SLH-DSA-128s: size 7856 B, KeyGen 292,862 C,
+// SigGen 2,279,391 C, SigVer 2,387 C (avg) / 4,123 C (worst-case WOTS-TW).
 function slhMetrics(p) {
-  const hp = p.h / p.d, len = slhWotsLen(p.w);
+  const hp = p.h / p.d;
+  const l1 = Math.ceil(8 * N / Math.log2(p.w));
+  const l2 = Math.floor(Math.log2(l1 * (p.w - 1)) / Math.log2(p.w)) + 1;
+  const len = l1 + l2;
+  const Thl = computeTh(len);
+  const Thk = computeTh(p.k);
+
   // R (1·n) + FORS (k·(a+1)·n) + hypertree auth (h·n) + WOTS (d·len·n) — 7856 B for 128s
   const size = N * (1 + p.k * (p.a + 1) + p.h + p.d * len);
-  const kg = Math.pow(2, hp) * (len * (p.w - 1) + 1) * SLH_FUDGE.kg;
-  const sg = (p.k * Math.pow(2, p.a) + p.d * Math.pow(2, hp) * (len * (p.w - 1) + 1)) * SLH_FUDGE.sg;
-  const sv = (p.k * p.a + p.h + p.d * len * (p.w - 1) / 2) * SLH_FUDGE.sv;
-  return { size, kg, sg, sv, svWorst: sv };  // SLH-DSA model doesn't distinguish worst vs avg
+
+  // One XMSS layer: 2^h' WOTS keypairs (PRF + chains + leaf compress) + internal nodes
+  const leaves = Math.pow(2, hp);
+  const wotsCost = len * C_PRF + len * (p.w - 1) * C_Th1 + Thl;
+  const cMerkle = leaves * wotsCost + (leaves - 1) * C_Th2;
+  const kg = cMerkle;
+
+  // FORS: k·2^a leaves (PRF + Th1) + k·(2^a − 1) internal nodes + root compress
+  const forsLeaves = Math.pow(2, p.a);
+  const cFors = p.k * forsLeaves * C_PRF + p.k * forsLeaves * C_Th1
+              + p.k * (forsLeaves - 1) * C_Th2 + Thk;
+  const sg = cFors + C_Hmsg + C_PRFmsg + p.d * cMerkle;
+
+  // Verification: Hmsg + FORS paths + d WOTS verifies + h auth-path nodes
+  const cFts = p.k * C_Th1 + p.k * p.a * C_Th2 + Thk;
+  const cWotsAvg = Math.floor((p.w - 1) * len / 2) * C_Th1 + Thl;
+  const sv = C_Hmsg + cFts + p.d * cWotsAvg + p.h * C_Th2;
+  const cWotsWorst = wotsVerifyWorstSteps(p.w) * C_Th1 + Thl;
+  const svWorst = C_Hmsg + cFts + p.d * cWotsWorst + p.h * C_Th2;
+
+  return { size, kg, sg, sv, svWorst };
 }
 
 // Candidate builder 
