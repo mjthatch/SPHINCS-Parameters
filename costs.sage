@@ -131,17 +131,21 @@ def compute_wots_l(scheme, w):
     Compute WOTS chain count l based on scheme type.
 
     For WOTS-TW (plain): l = l1 + l2
-        l1 = n / log2(w)           -- message chains
+        l1 = ceil(8n / log2(w))    -- message chains (FIPS 205 Sec. 5)
         l2 = ceil(log_w(l1*(w-1))) -- checksum chains
 
     For WOTS+C: l = l1 (no checksum chains, replaced by counter)
+
+    Note: l1 must round UP. For w=16 and w=256 the division is exact,
+    but w=32 needs 26 chains (26*5 = 130 >= 128 bits); floor division
+    would give 25 chains, which cannot encode a 128-bit digest.
     """
     if scheme == "SPX":
-        l1 = hashbytes*8//log(w,2)
+        l1 = ceil(hashbytes*8/log(w,2))
         l2 = ceil(log(l1*(w-1), 2)/log(w, 2))
         return l1 + l2
     else:
-        return hashbytes*8//log(w,2)
+        return ceil(hashbytes*8/log(w,2))
 
 def compute_wots_tw_worst_steps(l1, l2, w):
     """
