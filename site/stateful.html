@@ -400,12 +400,12 @@ function computeTh(n) { return Math.ceil((128 + 96 + 128 * n + 65) / 512); }
 function wotsL(w, ots) {
   const l1 = Math.ceil(8 * N / Math.log2(w));
   if (ots === 'WC') return l1;
-  const l2 = Math.ceil(Math.log2(l1 * (w - 1)) / Math.log2(w));
+  // FIPS 205 form: len2 = floor(log_w(len1*(w-1))) + 1
+  const l2 = Math.floor(Math.log2(l1 * (w - 1)) / Math.log2(w)) + 1;
   return l1 + l2;
 }
 
 function wotsThl(l, ots) {
-  if (ots === 'classic') return Math.ceil((128 * l + 65) / 512);
   return computeTh(l);
 }
 
@@ -453,7 +453,7 @@ function wotsSignC(w, swn, ots) {
 
 function wotsVerifyWorstSteps(w) {
   const l1 = Math.ceil(8 * N / Math.log2(w));
-  const l2 = Math.ceil(Math.log2(l1 * (w - 1)) / Math.log2(w));
+  const l2 = Math.floor(Math.log2(l1 * (w - 1)) / Math.log2(w)) + 1;
   const C = l1 * (w - 1);
   let ds = 0, rem = C;
   while (rem > 0) { ds += rem % w; rem = Math.floor(rem / w); }
@@ -479,12 +479,6 @@ function treeKeygenC(hPrime, w, ots) {
   const pk = wotsPkC(w, ots);
   const sz = Math.pow(2, hPrime);
   return sz * pk + (sz - 1) * C_Th2;
-}
-function treeSignBdsC(hPrime, w, swn, ots) {
-  // BDS amortised: 1 WOTS sig + h' WOTS PK + h' tree hashes per signature
-  const pk = wotsPkC(w, ots);
-  const cSg = wotsSignC(w, swn, ots);
-  return C_Hmsg + C_PRFmsg + cSg + hPrime * pk + hPrime * C_Th2;
 }
 function treeVerifyC(hPrime, w, swn, ots, worstCase) {
   return wotsVerifyC(w, swn, ots, worstCase) + hPrime * C_Th2;
@@ -599,7 +593,9 @@ function buildSLH() {
       siggen: m.sg,
       sigver: m.sv,
       sigverWorst: m.svWorst,
-      qsLog2: 40,
+      // FIPS 205 capacity for SLH-DSA-128s is 2^64 signatures; the report
+      // evaluates its security at q_s = 2^40 (see the sweep's Min-sigs bound).
+      qsLog2: 64,
       qsExact: null,
     },
   };
@@ -709,7 +705,7 @@ const METRIC_COLS = [
   { label: 'SigVer (C)',  value: m => fmtCompressions(m.sigver),                   ratioField: 'sigver',  lowerIsBetter: true },
   { label: 'C/B (avg)',   value: m => fmtCpb(m.sigver / m.size),                   ratioFn: m => (m.sigver      / m.size),  lowerIsBetter: true },
   { label: 'C/B (worst)', value: m => fmtCpb(m.sigverWorst / m.size),              ratioFn: m => (m.sigverWorst / m.size),  lowerIsBetter: true },
-  { label: 'q_s',         value: (_, c) => fmtQs(c.metrics) },
+  { label: 'Max sigs',    value: (_, c) => fmtQs(c.metrics) },
 ];
 
 function ratioClass(ratio, lowerIsBetter) {
@@ -960,7 +956,7 @@ const SWEEP_COLS = [
   { field: 'cb',       label: 'C/B (avg)',  value: m => fmtCpb(m.sigver / m.size),              sortFn: (m) => m.sigver / m.size,                                       ratioFn: m => m.sigver / m.size,  lowerIsBetter: true },
   { field: 'distance', label: 'Distance',   value: (m, c, std) => sweepDistance(m, std, sweepState.W).toFixed(4),
                                             sortFn: (m, c, std) => sweepDistance(m, std, sweepState.W) },
-  { field: 'qs',       label: 'q_s',        value: (_, c) => fmtQs(c.metrics),                  sortFn: (m) => (m.qsLog2 !== null ? Math.pow(2, m.qsLog2) : m.qsExact) },
+  { field: 'qs',       label: 'Max sigs',   value: (_, c) => fmtQs(c.metrics),                  sortFn: (m) => (m.qsLog2 !== null ? Math.pow(2, m.qsLog2) : m.qsExact) },
 ];
 
 function renderSweepTable() {

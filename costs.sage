@@ -131,8 +131,8 @@ def compute_wots_l(scheme, w):
     Compute WOTS chain count l based on scheme type.
 
     For WOTS-TW (plain): l = l1 + l2
-        l1 = ceil(8n / log2(w))    -- message chains (FIPS 205 Sec. 5)
-        l2 = ceil(log_w(l1*(w-1))) -- checksum chains
+        l1 = ceil(8n / log2(w))              -- message chains (FIPS 205 Sec. 5)
+        l2 = floor(log_w(l1*(w-1))) + 1      -- checksum chains (FIPS 205 Sec. 5)
 
     For WOTS+C: l = l1 (no checksum chains, replaced by counter)
 
@@ -142,7 +142,7 @@ def compute_wots_l(scheme, w):
     """
     if scheme == "SPX":
         l1 = ceil(hashbytes*8/log(w,2))
-        l2 = ceil(log(l1*(w-1), 2)/log(w, 2))
+        l2 = floor(log(l1*(w-1), 2)/log(w, 2)) + 1
         return l1 + l2
     else:
         return ceil(hashbytes*8/log(w,2))
@@ -492,7 +492,7 @@ def compute_verification_time(h, d, a, k, w, swn, scheme, mmax=0):
         c_wots = (w-1)*l//2*C_Th1 + Thl
         # Worst case (all message digits 0): see compute_wots_tw_worst_steps.
         l1 = ceil(hashbytes*8/log(w,2))
-        l2 = ceil(log(l1*(w-1), 2)/log(w, 2))
+        l2 = floor(log(l1*(w-1), 2)/log(w, 2)) + 1
         c_wots_worst = compute_wots_tw_worst_steps(l1, l2, w)*C_Th1 + Thl
 
     # FTS verification

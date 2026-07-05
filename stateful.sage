@@ -152,7 +152,7 @@ def wots_l(w, ots_type):
     l1 = int(ceil(N * 8 / log(w, 2)))
     if ots_type == OTS_WC:
         return int(l1)
-    l2 = int(ceil(log(l1 * (w - 1), 2) / log(w, 2)))
+    l2 = int(floor(log(l1 * (w - 1), 2) / log(w, 2))) + 1
     return int(l1 + l2)
 
 
@@ -181,7 +181,7 @@ def wots_sign_C(w, swn, ots_type):
 
 def wots_verify_worst_steps(w, ots_type):
     l1 = int(ceil(N * 8 / log(w, 2)))
-    l2 = int(ceil(log(l1 * (w - 1), 2) / log(w, 2)))
+    l2 = int(floor(log(l1 * (w - 1), 2) / log(w, 2))) + 1
     C = l1 * (w - 1)
     ds = 0
     rem = C

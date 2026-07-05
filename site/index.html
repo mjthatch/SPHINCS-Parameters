@@ -794,7 +794,7 @@
 
     /**
      * Compute bit security against FORS subset-forgery for q_s = 2^q_s_log2 signatures.
-     * Returns floor(min(8·hashbytes, -log2(forgery_probability))) — i.e., capped by
+     * Returns min(8·hashbytes, -log2(forgery_probability)) — i.e., capped by
      * the hash preimage bound. hashbytes=16 ⇒ 128-bit cap.
      */
     function computeSecurityBits(q_s_log2, h, k, a, hashbytes = 16) {
@@ -1367,6 +1367,17 @@
       // Compute metrics
       const m = metrics(p);
 
+      // Guard against overflow: 2^(h/d) exceeds double precision for h' ≳ 1024,
+      // and the model stops being meaningful long before that.
+      if (!isFinite(m.kg) || !isFinite(m.sg)) {
+        statusEl.className = 'custom-status invalid';
+        statusEl.innerHTML = `<strong>Out of range.</strong> h' = h/d = ${(p.h / p.d).toFixed(0)} ` +
+          `is too large — the 2<sup>h'</sup> per-layer tree cost overflows this model. ` +
+          `Reduce h or increase d.`;
+        resultEl.innerHTML = '';
+        return;
+      }
+
       // Status banner
       if (v.warnings.length) {
         statusEl.className = 'custom-status warn';
@@ -1475,6 +1486,13 @@
       update();
       attachScatterHover();
       attachCustomCandidate();
+
+      // Re-render the scatter when the canvas CSS size changes
+      window.addEventListener('resize', () => {
+        if (state.lastEliminatedAt) {
+          renderScatter(state.lastEliminatedAt, state.lastSurvivors, state.lastWinner);
+        }
+      });
     }
 
     setup();

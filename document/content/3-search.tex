@@ -375,7 +375,7 @@ Compression per Byte ($\rho$) & $0.3038$            & $0.2750$            & $0.9
 \end{table}
 
 Comparing the two cases, the resulting metrics are different.
-The regular weighted distance chooses more balanced best candidate, while the metric-normilized weighted distance selects candidate with noticeably smaller signature size, trading the key and signature generation costs.
+The regular weighted distance chooses a more balanced best candidate, while the metric-normalized weighted distance selects a candidate with a noticeably smaller signature size, trading the key and signature generation costs.
 
 The outcome of each distance method shown in the Figure~\ref{fig:distance_result_comparison}.
 
@@ -408,7 +408,7 @@ To demonstrate the full pipeline on a concrete parameter set we selected, we fix
     X_{\text{size}} = 0.74, \quad X_{\text{kg}} = 2.0, \quad X_{\text{sg}} = 2.0,
     \quad X_{\text{sv}} = 0.8, \quad X_{\text{cb}} = 1.0.
 \end{equation*}
-These coefficients say that we really care about the signature size (to make at least 25\% win) and the verification complexity. At the same time having the key and signature complexity 2$\times$ at most is a acceptable trade-off because (1) it's not very critical taking into account even hardware wallet takes 2-3 seconds to produce SLH-DSA signature, (2) we can apply pruning technique \cite{conduition-blog} to reduce it additionally.  
+These coefficients say that we really care about the signature size (to make at least 25\% win) and the verification complexity. At the same time having the key and signature complexity 2$\times$ at most is an acceptable trade-off because (1) it's not very critical taking into account even hardware wallet takes 2-3 seconds to produce SLH-DSA signature, (2) we can apply pruning technique \cite{conduition-blog} to reduce it additionally.  
 
 Applying these constraints to the full parameter grid leaves exactly two surviving configurations, whose metrics are compared against the standard baseline in Table~\ref{tab:euclidean_candidate_metrics_ideal}.
 
