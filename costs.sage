@@ -482,12 +482,18 @@ def compute_verification_time(h, d, a, k, w, swn, scheme, mmax=0):
     if has_wc:
         # WOTS+C: chain positions sum to S_{w,n}, so remaining steps = (w-1)*l - S_{w,n}
         # Plus: verify counter hash (Th1c) and compress public key (Thl)
+        # Deterministic: worst case == average case.
         h_wots = (w-1)*l - swn + 2
         c_wots = ((w-1)*l - swn)*C_Th1 + C_Th1c + Thl
+        c_wots_worst = c_wots
     else:  # Plain WOTS
         # Expected chain position is (w-1)/2, so expected remaining steps = (w-1)*l/2
         h_wots = (w-1)*l//2 + 1
         c_wots = (w-1)*l//2*C_Th1 + Thl
+        # Worst case (all message digits 0): see compute_wots_tw_worst_steps.
+        l1 = ceil(hashbytes*8/log(w,2))
+        l2 = ceil(log(l1*(w-1), 2)/log(w, 2))
+        c_wots_worst = compute_wots_tw_worst_steps(l1, l2, w)*C_Th1 + Thl
 
     # FTS verification
     if scheme == "W+C_F+C":
@@ -505,9 +511,12 @@ def compute_verification_time(h, d, a, k, w, swn, scheme, mmax=0):
         c_fts = k*C_Th1 + k*a*C_Th2 + Thk
 
     # Total: Hmsg + FTS + d*WOTS + h auth path nodes
+    # The FTS and auth-path costs are message-independent, so the worst case
+    # differs from the average only in the WOTS-TW chain walks.
     return {
         'hashes': 1 + h_fts + d*h_wots + h,
         'compressions': C_Hmsg + c_fts + d*c_wots + h*C_Th2,
+        'compressions_worst': C_Hmsg + c_fts + d*c_wots_worst + h*C_Th2,
     }
 
 # =============================================================================
@@ -531,6 +540,7 @@ def compute_all_results():
         keygen_compressions = compute_keygen_time(h, d, w, scheme)
         size = compute_size(h, d, a, k, w, scheme, sign['mmax'])
         compressions_per_byte = float(verify['compressions']) / float(size)
+        compressions_per_byte_worst = float(verify['compressions_worst']) / float(size)
 
         results.append({
             'scheme': scheme,
@@ -550,7 +560,9 @@ def compute_all_results():
             'worst_search': sign['worst_search'],
             'verify_hashes': verify['hashes'],
             'verify_compressions': verify['compressions'],
+            'verify_compressions_worst': verify['compressions_worst'],
             'compressions_per_byte': compressions_per_byte,
+            'compressions_per_byte_worst': compressions_per_byte_worst,
             'bold': bold,
         })
     return results
@@ -558,11 +570,11 @@ def compute_all_results():
 
 def generate_csv():
     """Generate CSV output for all parameter sets."""
-    print("scheme,q_s,h,d,a,k,w,l,paramsum,size,keygen_compressions,sign_hashes,sign_compressions,exp_search,worst_search,verify_hashes,verify_compressions,compressions_per_byte,bold")
+    print("scheme,q_s,h,d,a,k,w,l,paramsum,size,keygen_compressions,sign_hashes,sign_compressions,exp_search,worst_search,verify_hashes,verify_compressions,verify_compressions_worst,compressions_per_byte,compressions_per_byte_worst,bold")
 
     for r in compute_all_results():
         bold_str = "True" if r['bold'] else "False"
-        print(f"{r['scheme']},2^{r['q_s']},{r['h']},{r['d']},{r['a']},{r['k']},{r['w']},{r['l']},{r['swn']},{r['size']},{r['keygen_compressions']},{r['sign_hashes']},{r['sign_compressions']},{r['exp_search']},{r['worst_search']},{r['verify_hashes']},{r['verify_compressions']},{r['compressions_per_byte']:.2f},{bold_str}")
+        print(f"{r['scheme']},2^{r['q_s']},{r['h']},{r['d']},{r['a']},{r['k']},{r['w']},{r['l']},{r['swn']},{r['size']},{r['keygen_compressions']},{r['sign_hashes']},{r['sign_compressions']},{r['exp_search']},{r['worst_search']},{r['verify_hashes']},{r['verify_compressions']},{r['verify_compressions_worst']},{r['compressions_per_byte']:.2f},{r['compressions_per_byte_worst']:.2f},{bold_str}")
 
 
 def format_num(n):
@@ -670,8 +682,8 @@ def compute_single(scheme, q_s_log2, h, d, a, k, w, swn):
     print("Size:       " + str(int(size)) + " bytes")
     print("Keygen(C):  " + format_num(keygen_compressions))
     print("Sign(C):    " + format_num(sign['compressions']))
-    print("Verify(C):  " + format_num(verify['compressions']))
-    print("C/byte:     " + "{:.2f}".format(c_per_byte))
+    print("Verify(C):  " + format_num(verify['compressions']) + "  (worst: " + format_num(verify['compressions_worst']) + ")")
+    print("C/byte:     " + "{:.2f}".format(c_per_byte) + "  (worst: " + "{:.2f}".format(float(verify['compressions_worst'])/float(size)) + ")")
 
 
 if __name__ == "__main__":

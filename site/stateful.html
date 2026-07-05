@@ -357,7 +357,7 @@
       <summary class="filter-section-label">
         <span class="chev">▸</span>
         Weights
-        <span class="filter-section-hint">(advanced)</span>
+        <span class="filter-section-hint">(advanced — distance uses metric-normalised ratios across current survivors, as in the Parameter Explorer)</span>
       </summary>
       <div class="filter-grid" id="sweep-weights"></div>
     </details>
@@ -830,6 +830,8 @@ const sweepState = {
   X: { ...SWEEP_DEFAULTS_X },
   W: { ...SWEEP_DEFAULTS_W },
   sort: { col: 'distance', dir: 'asc' },
+  // Per-metric ratio ranges across current survivors (for distance normalisation)
+  lastRanges: Object.fromEntries(['size', 'kg', 'sg', 'sv', 'cb'].map(k => [k, { min: 0, max: 1 }])),
 };
 
 // Bound coefficient descriptors
@@ -850,28 +852,49 @@ const SWEEP_WEIGHT_FILTERS = [
   { key: 'cb',   label: 'w_cb',   min: 0.10, max: 10.00, step: 0.10, dp: 1 },
 ];
 
-// Weighted Euclidean distance
-function sweepDistance(m, std, W) {
-  const sum = W.size + W.kg + W.sg + W.sv + W.cb;
-  const p = {
-    size: W.size / sum, kg: W.kg / sum, sg: W.sg / sum, sv: W.sv / sum, cb: W.cb / sum
-  };
-  const cbT = m.sigver / m.size;
-  const cbS = std.sigver / std.size;
-  const X = {
+// Metric-normalised weighted Euclidean distance — same definition as the
+// Parameter Explorer (report, "Metric-Normalized Weighted Distance"): each
+// ratio axis is range-normalised to [0, 1] across the CURRENT survivor pool,
+// so weights keep equal leverage regardless of how loose each bound is.
+const SWEEP_METRIC_KEYS = ['size', 'kg', 'sg', 'sv', 'cb'];
+
+function sweepRatios(m, std) {
+  return {
     size: m.size / std.size,
     kg:   m.keygen / std.keygen,
     sg:   m.siggen / std.siggen,
     sv:   m.sigver / std.sigver,
-    cb:   cbT / cbS,
+    cb:   (m.sigver / m.size) / (std.sigver / std.size),
   };
-  return Math.sqrt(
-    p.size * X.size * X.size +
-    p.kg   * X.kg   * X.kg   +
-    p.sg   * X.sg   * X.sg   +
-    p.sv   * X.sv   * X.sv   +
-    p.cb   * X.cb   * X.cb
-  );
+}
+
+function computeSweepRanges(survivors, std) {
+  const ranges = {};
+  SWEEP_METRIC_KEYS.forEach(k => ranges[k] = { min: Infinity, max: -Infinity });
+  for (const f of survivors) {
+    const r = sweepRatios(f.cached.metrics, std);
+    SWEEP_METRIC_KEYS.forEach(k => {
+      if (r[k] < ranges[k].min) ranges[k].min = r[k];
+      if (r[k] > ranges[k].max) ranges[k].max = r[k];
+    });
+  }
+  SWEEP_METRIC_KEYS.forEach(k => {
+    if (!isFinite(ranges[k].min)) ranges[k] = { min: 0, max: 1 };
+    else if (ranges[k].max === ranges[k].min) ranges[k].max = ranges[k].min + 1; // avoid /0
+  });
+  return ranges;
+}
+
+function sweepDistance(m, std, W) {
+  const sum = W.size + W.kg + W.sg + W.sv + W.cb;
+  const R = sweepState.lastRanges;
+  const X = sweepRatios(m, std);
+  let d2 = 0;
+  for (const k of SWEEP_METRIC_KEYS) {
+    const norm = (X[k] - R[k].min) / (R[k].max - R[k].min); // in [0,1] for survivors
+    d2 += (W[k] / sum) * norm * norm;
+  }
+  return Math.sqrt(d2);
 }
 
 // Shared slider/number-input renderer
@@ -958,6 +981,8 @@ function renderSweepTable() {
     if (candQs < minQsAbs) continue;
     survivors.push(f);
   }
+  // Refresh normalisation ranges for this survivor pool (used by sweepDistance)
+  sweepState.lastRanges = computeSweepRanges(survivors, std);
   // Apply the user's selected sort
   const sortCol = SWEEP_COLS.find(c => c.field === sweepState.sort.col) || SWEEP_COLS[0];
   const sign = sweepState.sort.dir === 'asc' ? 1 : -1;
