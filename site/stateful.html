@@ -333,7 +333,9 @@
     </form>
 
     <h2 style="margin-top: 20px;">Comparison table</h2>
-    <p class="hint">All cost columns are SHA-256 compression-function calls. Cost ratios under each value compare against SLH-DSA-128s.</p>
+    <p class="hint">All cost columns are SHA-256 compression-function calls. Cost ratios under each value compare against SLH-DSA-128s.
+      UXMSS signatures grow with the signature index q: the size column shows the q=1 → q=hsf range, and all
+      ratios, filters and verification costs use the worst case (q = hsf).</p>
     <div class="compare-wrap">
       <table class="compare" id="compare-table"></table>
     </div>
@@ -631,12 +633,18 @@ function buildUxmss(ots, w) {
     scheme: 'UXMSS',
     canRemove: true,
     hsf,
+    sub: `sig grows with q — worst case (q = hsf = ${hsf}) shown`,
     metrics: {
-      size: uxmssSize(1, hsf, w, ots),
+      // UXMSS signatures grow with the signature index q: the q-th signature
+      // carries min(q, hsf) auth nodes. The binding design constraint is the
+      // WORST case (q = hsf), matching sz_max / verify_max_* in stateful.sage;
+      // sizeQ1 keeps the best case (q = 1) for the range display.
+      size: uxmssSize(hsf, hsf, w, ots),
+      sizeQ1: uxmssSize(1, hsf, w, ots),
       keygen: uxmssKeygenC(hsf, w, ots),
       siggen: uxmssSignC(w, swn, ots),
-      sigver: uxmssVerifyC(1, hsf, w, swn, ots, false),
-      sigverWorst: uxmssVerifyC(1, hsf, w, swn, ots, true),
+      sigver: uxmssVerifyC(hsf, hsf, w, swn, ots, false),
+      sigverWorst: uxmssVerifyC(hsf, hsf, w, swn, ots, true),
       qsLog2: null,
       qsExact: hsf + 1,
     },
@@ -658,6 +666,14 @@ function defaultCandidates() {
 
 //  Formatting 
 function fmtBytes(n) { return n.toLocaleString() + ' B'; }
+// Size cell: schemes with q-dependent signatures (UXMSS) show best–worst range;
+// ratios/filters/sorting always use the worst case (m.size).
+function fmtSize(m) {
+  if (m.sizeQ1 !== undefined && m.sizeQ1 !== m.size) {
+    return `${m.sizeQ1.toLocaleString()}–${m.size.toLocaleString()} B`;
+  }
+  return fmtBytes(m.size);
+}
 function fmtCompressions(n) {
   if (!isFinite(n)) return '—';
   if (n >= 1e15) return n.toExponential(2);
@@ -687,7 +703,7 @@ const state = { candidates: defaultCandidates() };
 // Render 
 // Metric column descriptors
 const METRIC_COLS = [
-  { label: 'Sig size',    value: m => fmtBytes(m.size),                            ratioField: 'size',    lowerIsBetter: true },
+  { label: 'Sig size',    value: m => fmtSize(m),                                  ratioField: 'size',    lowerIsBetter: true },
   { label: 'KeyGen (C)',  value: m => fmtCompressions(m.keygen),                   ratioField: 'keygen',  lowerIsBetter: true },
   { label: 'SigGen (C)',  value: m => fmtCompressions(m.siggen),                   ratioField: 'siggen',  lowerIsBetter: true },
   { label: 'SigVer (C)',  value: m => fmtCompressions(m.sigver),                   ratioField: 'sigver',  lowerIsBetter: true },
@@ -721,7 +737,7 @@ function renderComparison() {
     const isStd = (i === 0);
 
     let row = `<tr class="${isStd ? 'baseline' : ''}">`;
-    row += `<td class="cand-col"><span class="cand-title">${c.label}</span></td>`;
+    row += `<td class="cand-col"><span class="cand-title">${c.label}</span>${c.sub ? `<span class="cand-sub">${c.sub}</span>` : ''}</td>`;
 
     for (const col of METRIC_COLS) {
       let cell = col.value(m, c);
@@ -914,7 +930,7 @@ function renderSweepFilters() {
 
 // Sweep-table metric columns
 const SWEEP_COLS = [
-  { field: 'size',     label: 'Sig size',   value: m => fmtBytes(m.size),                       sortFn: (m) => m.size,                                                  ratioFn: m => m.size,             lowerIsBetter: true },
+  { field: 'size',     label: 'Sig size',   value: m => fmtSize(m),                             sortFn: (m) => m.size,                                                  ratioFn: m => m.size,             lowerIsBetter: true },
   { field: 'keygen',   label: 'KeyGen (C)', value: m => fmtCompressions(m.keygen),              sortFn: (m) => m.keygen,                                                ratioFn: m => m.keygen,           lowerIsBetter: true },
   { field: 'siggen',   label: 'SigGen (C)', value: m => fmtCompressions(m.siggen),              sortFn: (m) => m.siggen,                                                ratioFn: m => m.siggen,           lowerIsBetter: true },
   { field: 'sigver',   label: 'SigVer (C)', value: m => fmtCompressions(m.sigver),              sortFn: (m) => m.sigver,                                                ratioFn: m => m.sigver,           lowerIsBetter: true },
@@ -990,7 +1006,7 @@ function renderSweepTable() {
     const c = f.cached;
     const m = c.metrics;
     let row = `<tr>`;
-    row += `<td class="cand-col"><span class="cand-title">${c.label}</span></td>`;
+    row += `<td class="cand-col"><span class="cand-title">${c.label}</span>${c.sub ? `<span class="cand-sub">${c.sub}</span>` : ''}</td>`;
     for (const col of SWEEP_COLS) {
       let cell = col.value(m, c, std);
       if (col.ratioFn) {
