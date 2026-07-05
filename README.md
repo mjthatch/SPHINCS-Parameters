@@ -8,5 +8,6 @@ Scripts for exploring SPHINCS+ parameter tradeoffs, computing security levels, s
 - [slhdsa-2to40.sage](slhdsa-2to40.sage) sweeps SLH-DSA parameter tuples and filters them by security level and signature size
 - [run_experiments.py](run_experiments.py) runs the full parameter sweep and writes results to CSV
 - [utils/](utils/) helper scripts for searching and visualising the parameter space
+- [tests/](tests/) regression suite — run `python3 tests/test_regression.py`; diffs an independent reference model against the CSVs, both site pages (needs node), and costs.sage (when sage is available)
 - [document/](document/) LaTeX source for the accompanying technical report
 - [site/](site/) interactive explorer hosted on GitHub Pages — stateless parameter search ([index.html](site/index.html)) and stateful scheme comparison ([stateful.html](site/stateful.html)) — including the compiled [report.pdf](site/report.pdf)
