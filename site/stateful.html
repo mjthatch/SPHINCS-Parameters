@@ -375,7 +375,7 @@
 // Constants from costs.sage / stateful.sage
 const N = 16;                 // hashbytes
 const C_SIZE = 4;             // counter_size (WOTS+C grinding counter)
-const R_SIZE = 32;            // randomness_size
+const R_SIZE = 16;            // randomness_size = n (matches costs.sage; SLH-DSA R is n bytes)
 const C_Th1 = 1;
 const C_Th1c = 1;
 const C_Th2 = 2;
@@ -550,7 +550,8 @@ function slhWotsLen(w) {
 }
 function slhMetrics(p) {
   const hp = p.h / p.d, len = slhWotsLen(p.w);
-  const size = N * (2 + p.k * (p.a + 1) + p.h + p.d * len);
+  // R (1·n) + FORS (k·(a+1)·n) + hypertree auth (h·n) + WOTS (d·len·n) — 7856 B for 128s
+  const size = N * (1 + p.k * (p.a + 1) + p.h + p.d * len);
   const kg = Math.pow(2, hp) * (len * (p.w - 1) + 1) * SLH_FUDGE.kg;
   const sg = (p.k * Math.pow(2, p.a) + p.d * Math.pow(2, hp) * (len * (p.w - 1) + 1)) * SLH_FUDGE.sg;
   const sv = (p.k * p.a + p.h + p.d * len * (p.w - 1) / 2) * SLH_FUDGE.sv;

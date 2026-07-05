@@ -98,7 +98,7 @@ def _parse_args(argv):
 
 N          = hashbytes       # 16 bytes = 128-bit hash output
 C_SIZE     = counter_size    # 4 bytes (WOTS+C grinding counter)
-R_SIZE     = randomness_size # 32 bytes (message randomness, from costs.sage)
+R_SIZE     = randomness_size # 16 bytes = n (message randomness, from costs.sage)
 TARGET_SEC = 128             # Minimum security level (bits)
 
 
