@@ -64,6 +64,7 @@ from math import log, ceil
 _saved_argv = sys.argv
 sys.argv = ['stateful.sage']
 _dir = os.path.dirname(os.path.abspath(__file__))
+os.environ['COSTS_SAGE_NO_MAIN'] = '1'   # functions only — suppress costs.sage CLI output
 load(os.path.join(_dir, "costs.sage"))
 sys.argv = _saved_argv
 
@@ -593,7 +594,10 @@ def print_uxmss_detail(uxmss_by_h):
     print()
 
 
-if __name__ == "__main__":
+# The env flag lets other scripts (export_site_data.sage) load this file for
+# its functions without triggering the CLI tables (sage's load() executes in
+# the caller's namespace, where __name__ is '__main__').
+if __name__ == "__main__" and not os.environ.get("STATEFUL_SAGE_NO_MAIN"):
     refs = {}
     for h in UXMSS_H_VALS:
         print("Applying Candidate 2 as hardcoded reference (5,712 B) for target 2^{}.".format(h),

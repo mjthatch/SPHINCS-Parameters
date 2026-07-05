@@ -686,7 +686,10 @@ def compute_single(scheme, q_s_log2, h, d, a, k, w, swn):
     print("C/byte:     " + "{:.2f}".format(c_per_byte) + "  (worst: " + "{:.2f}".format(float(verify['compressions_worst'])/float(size)) + ")")
 
 
-if __name__ == "__main__":
+# The env flag lets other scripts (stateful.sage, export_site_data.sage) load
+# this file for its functions without triggering the CLI output (sage's
+# load() executes in the caller's namespace, where __name__ is '__main__').
+if __name__ == "__main__" and not os.environ.get("COSTS_SAGE_NO_MAIN"):
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "--table":

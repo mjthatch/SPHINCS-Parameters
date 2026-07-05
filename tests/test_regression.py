@@ -190,7 +190,106 @@ console.log(JSON.stringify(out));
 
 
 # ---------------------------------------------------------------------------
-# 4. Sage (optional)
+# 4. Canonical site dataset (site/data.json)
+# ---------------------------------------------------------------------------
+
+def _site_data():
+    return json.load(open(os.path.join(ROOT, 'site', 'data.json')))
+
+
+def test_data_json_meta():
+    d = _site_data()
+    for key in ('generator', 'generated', 'commit', 'grid', 'sweep_count', 'pool_count'):
+        assert key in d['meta'], key
+    assert d['meta']['sweep_count'] == 25935
+    assert d['meta']['pool_count'] == FIX['site_pool_count']
+    assert d['meta']['grid']['h'] == [40, 50]
+    assert d['meta']['grid']['k'] == [6, 24]
+
+
+def test_data_json_stateless():
+    d = _site_data()
+    b = FIX['baseline']
+    for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
+        assert d['baseline'][k] == b[k], k
+    fields = d['stateless_pool']['fields']
+    idx = {f: i for i, f in enumerate(fields)}
+    rows = d['stateless_pool']['rows']
+    assert len(rows) == FIX['site_pool_count']
+    csv_tuples = {tuple(int(r[x]) for x in 'hdkaw')
+                  for r in _csv_rows('all_size_capped_candidates.csv')
+                  if r['label'] != 'STANDARD'}
+    json_tuples = set()
+    for r in rows:
+        t = (r[idx['h']], r[idx['d']], r[idx['k']], r[idx['a']], r[idx['w']])
+        json_tuples.add(t)
+        m = M.spx_metrics(*t)
+        got = tuple(r[idx[k]] for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'))
+        want = (m['size'], m['kg'], m['sg'], m['sv'], m['sv_worst'])
+        assert got == want, (t, got, want)
+    assert json_tuples == csv_tuples
+
+
+def test_data_json_stateful():
+    d = _site_data()['stateful']
+    b = FIX['baseline']
+    assert (d['slh']['size'], d['slh']['kg'], d['slh']['sg'], d['slh']['sv'],
+            d['slh']['sv_worst'], d['slh']['qs_log2']) == \
+           (b['size'], b['kg'], b['sg'], b['sv'], b['sv_worst'], 64)
+    xi = {f: i for i, f in enumerate(d['xmssmt']['fields'])}
+    for r in d['xmssmt']['rows']:
+        m = M.xmssmt_metrics(r[xi['ots']], r[xi['h']], r[xi['d']], r[xi['w']])
+        got = tuple(r[xi[k]] for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'))
+        want = (m['size'], m['kg'], m['sg'], m['sv'], m['sv_worst'])
+        assert got == want, (r[:4], got, want)
+    ui = {f: i for i, f in enumerate(d['uxmss']['fields'])}
+    assert len(d['uxmss']['rows']) == 6
+    for r in d['uxmss']['rows']:
+        m = M.uxmss_metrics(r[ui['ots']], r[ui['w']])
+        got = tuple(r[ui[k]] for k in
+                    ('hsf', 'sz_q1', 'sz_max', 'kg', 'sg', 'sv_max', 'sv_max_worst'))
+        want = (m['hsf'], m['sz_q1'], m['sz_max'], m['kg'], m['sg'],
+                m['sv_max'], m['sv_max_worst'])
+        assert got == want, (r[:2], got, want)
+
+
+def test_site_data_integration():
+    """Run both pages' data-loading paths under node against site/data.json."""
+    data_path = os.path.join(ROOT, 'site', 'data.json')
+    # index.html: poolFromData must reproduce the pool; STD_M must equal baseline
+    js = _extract_js('index.html', '// ---------- State ----------')
+    js += f"""
+const data = JSON.parse(require('fs').readFileSync({json.dumps(data_path)}, 'utf8'));
+const pool = poolFromData(data);
+let ok = pool.length === data.meta.pool_count;
+const KEYS = ['size','kg','sg','sv','sv_worst'];
+ok = ok && !KEYS.some(k => STD_M[k] !== data.baseline[k]);
+const step = Math.max(1, Math.floor(pool.length / 50));
+for (let i = 0; i < pool.length; i += step) {{
+  const m = metrics(pool[i]);
+  if (KEYS.some(k => m[k] !== pool[i][k])) ok = false;
+}}
+console.log(JSON.stringify({{ok, n: pool.length}}));
+"""
+    out = _run_node(js)
+    if out is not None:
+        assert out['ok'] and out['n'] == FIX['site_pool_count'], out
+    # stateful.html: the page's own self-check must pass on the shipped data
+    js2 = _extract_js('stateful.html', '// Shared slider/number-input renderer')
+    js2 += f"""
+SITE_DATA = JSON.parse(require('fs').readFileSync({json.dumps(data_path)}, 'utf8'));
+const okCheck = selfCheckStateful(SITE_DATA);
+const slh = buildSLH().metrics;
+const okSlh = slh.size === SITE_DATA.stateful.slh.size && slh.qsLog2 === 64;
+console.log(JSON.stringify({{ok: okCheck && okSlh}}));
+"""
+    out2 = _run_node(js2)
+    if out2 is not None:
+        assert out2['ok'], out2
+
+
+# ---------------------------------------------------------------------------
+# 5. Sage (optional)
 # ---------------------------------------------------------------------------
 
 def test_sage_costs():
