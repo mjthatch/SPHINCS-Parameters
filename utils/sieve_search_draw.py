@@ -94,18 +94,18 @@ def place_candidates(n_points, x_range, y_range):
         
     return pts
 
-def apply_sequential_filters(df, minimax_val):
+def apply_sequential_filters(df, minimax_val, X):
     n_points = len(df)
     alive_mask = np.ones(n_points, dtype=bool)
-    
+
     history = [np.arange(n_points)]
-    
+
     conditions = [
-        ('size_X', '<=', 0.74, "Size <= X * Std"),
-        ('keygen_X', '<=', 1.0, "KeyGen <= X * std"),
-        ('sign_X', '<=', 1.6, "SigGen <= X * Std"),
-        ('verify_X', '<=', 0.8, "Verify <= X * Std"),
-        ('rho_X', '<=', 1.0, f"Rho <= X * Std")
+        ('size_X', '<=', X['size'], "Size <= X * Std"),
+        ('keygen_X', '<=', X['keygen'], "KeyGen <= X * std"),
+        ('sign_X', '<=', X['sign'], "SigGen <= X * Std"),
+        ('verify_X', '<=', X['verify'], "Verify <= X * Std"),
+        ('rho_X', '<=', X['rho'], f"Rho <= X * Std")
     ]
     
     newly_killed_indices_list = []
@@ -219,8 +219,26 @@ def draw_sieve_stage(stage_index, pts, survived_indices, newly_killed_indices_li
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, default="outputs_specialized/cat1_extremes/all_unbound_candidates.csv")
+    parser.add_argument("--input", type=str, default="all_unbound_candidates.csv")
+    # Filter coefficients — defaults are the example from the report, Sec. "Sweep Strategy"
+    parser.add_argument("--x-size", type=float, default=0.85)
+    parser.add_argument("--x-kg", type=float, default=1.5)
+    parser.add_argument("--x-sg", type=float, default=2.0)
+    parser.add_argument("--x-sv", type=float, default=0.8)
+    parser.add_argument("--x-cb", type=float, default=1.0)
+    parser.add_argument("--weights", type=str, default="1,1,1,1,1",
+                        help="Distance weights: size,keygen,sign,verify,rho")
+    parser.add_argument("--suffix", type=str, default="",
+                        help="Suffix for the step-7 distance image filename")
     args = parser.parse_args()
+
+    X = {'size': args.x_size, 'keygen': args.x_kg, 'sign': args.x_sg,
+         'verify': args.x_sv, 'rho': args.x_cb}
+    w_vals = [float(v) for v in args.weights.split(",")]
+    if len(w_vals) != 5:
+        raise SystemExit("--weights needs 5 comma-separated values: size,keygen,sign,verify,rho")
+    global METRIC_WEIGHTS
+    METRIC_WEIGHTS = dict(zip(['size', 'keygen', 'sign', 'verify', 'rho'], w_vals))
 
     print("\n" + "="*80)
     print(f"Sieve Stacked Card Visualization")
@@ -237,7 +255,7 @@ def main():
     print("[2/3] Calculating 2D placement coordinates...")
     plane_points = place_candidates(n_total, (0, 100), (0, 100))
 
-    history, newly_killed_list = apply_sequential_filters(df, minimax_val)
+    history, newly_killed_list = apply_sequential_filters(df, minimax_val, X)
     print(f"      - Sieve 1 (Size):   {len(history[1])} passing")
     print(f"      - Sieve 2 (KeyGen): {len(history[2])} passing")
     print(f"      - Sieve 3 (SigGen): {len(history[3])} passing")
@@ -262,7 +280,7 @@ def main():
         "sieve_step4_siggen.png",  
         "sieve_step5_verify.png",  
         "sieve_step6_rho.png",
-        "sieve_step7_distance.png"
+        "sieve_step7_distance{}.png".format(args.suffix)
     ]
 
     print(f"\n[3/3] Rendering stacked card visualizations...")
