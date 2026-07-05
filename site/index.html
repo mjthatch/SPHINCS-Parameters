@@ -722,14 +722,17 @@
     const STD_M = metrics(STD);
 
     // ---------- Sweep ----------
-    // Parameter ranges from the report
+    // Canonical grid — must match the report (Sec. 2) and slhdsa-2to40.sage defaults:
+    //   h in [40, 50], d in [2, 25] with d | h, k in [6, 24], a in [8, 20], w in {16, 32, 256}.
+    // k >= 6 because with a <= 20 and h <= 50 any k <= 5 falls short of the
+    // 128-bit security floor at q_s = 2^40, so smaller k never survives anyway.
     function sweep() {
       const candidates = [];
-      for (let h = 40; h <= 52; h++) {
-        for (let d = 2; d <= 26; d++) {
+      for (let h = 40; h <= 50; h++) {
+        for (let d = 2; d <= 25; d++) {
           if (h % d !== 0) continue;
-          for (let k = 2; k <= 25; k++) {
-            for (let a = 8; a <= 21; a++) {
+          for (let k = 6; k <= 24; k++) {
+            for (let a = 8; a <= 20; a++) {
               for (const w of [16, 32, 256]) {
                 const p = { h, d, k, a, w };
                 const m = metrics(p);

@@ -13,7 +13,7 @@ Supported (ots, fts) combinations:
   (wots+c, pors+fp)  -> W+C_P+FP
 
 Sweep behavior per OTS:
-  - wots-tw : w in {16, 32}, swn = 0
+  - wots-tw : w in {16, 32, 256}, swn = 0
   - wots+c  : (w, swn) in {(16, 240), (256, 2040)}
 
 Filters (defaults; override via CLI):
