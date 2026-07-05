@@ -2,6 +2,10 @@
 
 *.sage.py
 
+# Generated sweep outputs
+utils/outputs_specialized/
+candidates.csv
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
