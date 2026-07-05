@@ -228,5 +228,76 @@
    }
   }
  },
- "site_pool_count": 9182
+ "site_pool_count": 9182,
+ "variants": {
+  "W+C|44,4,8,16,16,240": {
+   "size": 4960,
+   "kg": 1071102,
+   "sg": 6381815,
+   "sv": 1357,
+   "sv_worst": 1357
+  },
+  "W+C|40,5,11,14,256,2040": {
+   "size": 4596,
+   "kg": 1050366,
+   "sg": 5976457,
+   "sv": 10635,
+   "sv_worst": 10635
+  },
+  "W+C|40,5,11,14,256,2840": {
+   "size": 4596,
+   "kg": 1050366,
+   "sg": 6123432,
+   "sv": 6635,
+   "sv_worst": 6635
+  },
+  "W+C_F+C|44,4,8,16,16,240": {
+   "size": 4688,
+   "kg": 1071102,
+   "sg": 6381813,
+   "sv": 1324,
+   "sv_worst": 1324
+  },
+  "W+C_F+C|40,5,11,14,256,2040": {
+   "size": 4356,
+   "kg": 1050366,
+   "sg": 5976455,
+   "sv": 10606,
+   "sv_worst": 10606
+  },
+  "W+C_F+C|20,2,10,15,256,2040": {
+   "size": 3160,
+   "kg": 4201470,
+   "sg": 9715143,
+   "sv": 4416,
+   "sv_worst": 4416
+  },
+  "W+C_P+FP|44,4,8,16,16,240": {
+   "size": 4464,
+   "kg": 1071102,
+   "sg": 6869634,
+   "sv": 1292,
+   "sv_worst": 1292
+  },
+  "W+C_P+FP|40,5,11,14,256,2040": {
+   "size": 4020,
+   "kg": 1050366,
+   "sg": 6419013,
+   "sv": 10559,
+   "sv_worst": 10559
+  },
+  "W+C_P+FP|24,2,8,16,16,240": {
+   "size": 3112,
+   "kg": 2142206,
+   "sg": 6869506,
+   "sv": 752,
+   "sv_worst": 752
+  }
+ },
+ "variant_pool_counts": {
+  "W+C": 6666,
+  "W+C_F+C": 7077,
+  "W+C_P+FP": 7746
+ },
+ "_comment_variants": "variants: frozen from a real `sage costs.sage` CSV run; variant_pool_counts: frozen from the mpmath-verified 2026-07-05 generation (0 security pass/fail flips on the canonical grid)."
 }

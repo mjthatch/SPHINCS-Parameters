@@ -199,12 +199,16 @@ def _site_data():
 
 def test_data_json_meta():
     d = _site_data()
-    for key in ('generator', 'generated', 'commit', 'grid', 'sweep_count', 'pool_count'):
+    for key in ('version', 'generator', 'generated', 'commit', 'grid', 'schemes'):
         assert key in d['meta'], key
-    assert d['meta']['sweep_count'] == 25935
-    assert d['meta']['pool_count'] == FIX['site_pool_count']
+    assert d['meta']['version'] == 2
     assert d['meta']['grid']['h'] == [40, 50]
     assert d['meta']['grid']['k'] == [6, 24]
+    assert 'SPX' in d['meta']['schemes']
+    for s in d['meta']['schemes']:
+        p = d['pools'][s]
+        assert p['count'] == len(p['rows']), s
+    assert d['pools']['SPX']['considered'] == 25935
 
 
 def test_data_json_stateless():
@@ -212,9 +216,9 @@ def test_data_json_stateless():
     b = FIX['baseline']
     for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
         assert d['baseline'][k] == b[k], k
-    fields = d['stateless_pool']['fields']
-    idx = {f: i for i, f in enumerate(fields)}
-    rows = d['stateless_pool']['rows']
+    p = d['pools']['SPX']
+    idx = {f: i for i, f in enumerate(p['fields'])}
+    rows = p['rows']
     assert len(rows) == FIX['site_pool_count']
     csv_tuples = {tuple(int(r[x]) for x in 'hdkaw')
                   for r in _csv_rows('all_size_capped_candidates.csv')
@@ -227,7 +231,41 @@ def test_data_json_stateless():
         got = tuple(r[idx[k]] for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'))
         want = (m['size'], m['kg'], m['sg'], m['sv'], m['sv_worst'])
         assert got == want, (t, got, want)
+        assert r[idx['swn']] == 0 and r[idx['mmax']] == 0
     assert json_tuples == csv_tuples
+
+
+def test_variant_fixtures():
+    """Frozen values from a real `sage costs.sage` run vs the reference model."""
+    for key, f in FIX['variants'].items():
+        scheme, rest = key.split('|')
+        h, d, k, a, w, swn = (int(x) for x in rest.split(','))
+        m = M.scheme_metrics(scheme, h, d, k, a, w, swn)
+        for fld in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
+            assert m[fld] == f[fld], (key, fld, m[fld], f[fld])
+
+
+def test_data_json_variant_pools():
+    d = _site_data()
+    grid = d['meta']['grid']
+    for scheme in ('W+C', 'W+C_F+C', 'W+C_P+FP'):
+        if scheme not in d['pools']:
+            print(f'  [skip] {scheme} pool not exported')
+            continue
+        p = d['pools'][scheme]
+        assert p['count'] == FIX['variant_pool_counts'][scheme], (scheme, p['count'])
+        idx = {f: i for i, f in enumerate(p['fields'])}
+        for r in p['rows']:
+            h, dd, k, a, w, swn = (r[idx[x]] for x in ('h', 'd', 'k', 'a', 'w', 'swn'))
+            assert grid['h'][0] <= h <= grid['h'][1] and h % dd == 0
+            assert grid['k'][0] <= k <= grid['k'][1]
+            assert grid['a'][0] <= a <= grid['a'][1]
+            assert (w, swn) in ((16, 240), (256, 2040)), (w, swn)
+            m = M.scheme_metrics(scheme, h, dd, k, a, w, swn)
+            got = tuple(r[idx[x]] for x in ('mmax', 'size', 'kg', 'sg', 'sv', 'sv_worst'))
+            want = (m['mmax'], m['size'], m['kg'], m['sg'], m['sv'], m['sv_worst'])
+            assert got == want, (scheme, (h, dd, k, a, w, swn), got, want)
+            assert m['size'] < grid['max_size']
 
 
 def test_data_json_stateful():
@@ -260,14 +298,20 @@ def test_site_data_integration():
     js = _extract_js('index.html', '// ---------- State ----------')
     js += f"""
 const data = JSON.parse(require('fs').readFileSync({json.dumps(data_path)}, 'utf8'));
-const pool = poolFromData(data);
-let ok = pool.length === data.meta.pool_count;
+const pool = poolFromData(data, 'SPX');
+let ok = pool.length === data.pools.SPX.count;
 const KEYS = ['size','kg','sg','sv','sv_worst'];
 ok = ok && !KEYS.some(k => STD_M[k] !== data.baseline[k]);
 const step = Math.max(1, Math.floor(pool.length / 50));
 for (let i = 0; i < pool.length; i += step) {{
   const m = metrics(pool[i]);
   if (KEYS.some(k => m[k] !== pool[i][k])) ok = false;
+}}
+// variant pools must map cleanly too (field mapping + count only; metrics are sage-side)
+for (const s of data.meta.schemes) {{
+  const vp = poolFromData(data, s);
+  if (vp.length !== data.pools[s].count) ok = false;
+  if (vp.length && !(vp[0].size > 0 && vp[0].sv_worst >= vp[0].sv)) ok = false;
 }}
 console.log(JSON.stringify({{ok, n: pool.length}}));
 """

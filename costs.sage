@@ -207,9 +207,20 @@ def compute_pors_tree_geometry(k, a):
     extra_leaves = t - 2**subtree_height
     return t, subtree_height, extra_leaves
 
+_interleave_table_cache = {}
+
 def log2_exp_work_from_mmax(t, k, mmax):
-    """Look up log2 of expected work for PORS+FP grinding given mmax."""
-    table = dict(interleave_cost_table(t, k))
+    """Look up log2 of expected work for PORS+FP grinding given mmax.
+
+    The (t, k) tables are cached: compute_mmax probes several mmax values per
+    parameter set, and sweeps revisit the same (k, a) pairs for every (h, d) —
+    without the cache a full PORS+FP sweep rebuilds each table thousands of times.
+    """
+    key = (int(t), int(k))
+    table = _interleave_table_cache.get(key)
+    if table is None:
+        table = dict(interleave_cost_table(*key))
+        _interleave_table_cache[key] = table
     if mmax in table:
         return table[mmax]
     lowers = [m for m in table if m <= mmax]
