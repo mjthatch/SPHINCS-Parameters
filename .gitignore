@@ -6,6 +6,9 @@
 utils/outputs_specialized/
 candidates.csv
 
+# Compiled report — built and deployed by CI (.github/workflows/build_and_deploy.yml)
+site/report.pdf
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
