@@ -297,6 +297,7 @@
     <div class="actions">
       <button class="btn" id="show-add">+ Add candidate</button>
       <button class="btn btn-ghost" id="reset-defaults">Reset to defaults</button>
+      <button class="btn btn-ghost" id="share-btn" title="Copy a link that reproduces the current comparison list, bounds, weights and sort">Copy shareable link</button>
     </div>
 
     <form class="add-form" id="add-form" hidden>
@@ -363,6 +364,9 @@
     </details>
 
     <div class="sweep-info" id="sweep-info"></div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="sweep-export" title="Download the candidates passing the current bounds (with distances) as CSV">Export table (CSV)</button>
+    </div>
 
     <div class="compare-wrap">
       <table class="compare" id="sweep-table"></table>
@@ -607,6 +611,7 @@ function buildXmssMt(ots, h, d, w) {
   const swn = (ots === 'WC') ? WOTS_C_SWN[w] : 0;
   return {
     id: makeId(),
+    key: `xmssmt-${ots}-${w}-${h}-${d}`,
     label: `XMSS-2^${h} (${otsShort(ots)}, w=${w}, d=${d})`,
     scheme: d > 1 ? 'XMSS-MT' : 'XMSS',
     canRemove: true,
@@ -627,6 +632,7 @@ function buildUxmss(ots, w) {
   const hsf = findMaxHsf(w, ots, UXMSS_TARGET_SIZE);
   return {
     id: makeId(),
+    key: `uxmss-${ots}-${w}`,
     label: `UXMSS (${otsShort(ots)}, w=${w})`,
     scheme: 'UXMSS',
     canRemove: true,
@@ -660,6 +666,7 @@ function candFromXmssMtRec(rec, idx) {
   const [ots, h, d, w] = [rec[idx.ots], rec[idx.h], rec[idx.d], rec[idx.w]];
   return {
     id: makeId(),
+    key: `xmssmt-${ots}-${w}-${h}-${d}`,
     label: `XMSS-2^${h} (${otsShort(ots)}, w=${w}, d=${d})`,
     scheme: d > 1 ? 'XMSS-MT' : 'XMSS',
     canRemove: true,
@@ -675,6 +682,7 @@ function candFromUxmssRec(rec, idx) {
   const [ots, w, hsf] = [rec[idx.ots], rec[idx.w], rec[idx.hsf]];
   return {
     id: makeId(),
+    key: `uxmss-${ots}-${w}`,
     label: `UXMSS (${otsShort(ots)}, w=${w})`,
     scheme: 'UXMSS',
     canRemove: true,
@@ -933,6 +941,7 @@ const sweepState = {
   sort: { col: 'distance', dir: 'asc' },
   // Per-metric ratio ranges across current survivors (for distance normalisation)
   lastRanges: Object.fromEntries(['size', 'kg', 'sg', 'sv', 'cb'].map(k => [k, { min: 0, max: 1 }])),
+  lastSurvivors: [],   // survivors of the current bounds, in display order (for CSV export)
 };
 
 // Bound coefficient descriptors
@@ -1093,6 +1102,8 @@ function renderSweepTable() {
     if (av === bv) return 0;
     return sign * (av < bv ? -1 : 1);
   });
+  sweepState.lastSurvivors = survivors;
+  writeStatefulHash();
 
   // Info strip
   document.getElementById('sweep-info').innerHTML =
@@ -1186,6 +1197,110 @@ function renderSweepTable() {
 }
 
 // Add form 
+// Shareable URL state + CSV export
+const DEFAULT_CAND_KEYS = ['uxmss-TW-16', 'uxmss-WC-16', 'xmssmt-TW-16-10-1',
+  'xmssmt-WC-16-10-1', 'xmssmt-TW-16-20-1', 'xmssmt-WC-16-20-1'];
+const HASH_X_KEYS = ['size', 'kg', 'sg', 'sv', 'cb', 'minQs'];
+const HASH_W_KEYS = ['size', 'kg', 'sg', 'sv', 'cb'];
+
+// Rebuild any comparison candidate from its compact key
+// (xmssmt-<OTS>-<w>-<h>-<d> or uxmss-<OTS>-<w>).
+function candidateFromKey(key) {
+  const p = String(key).split('-');
+  if (p[0] === 'uxmss' && p.length === 3) {
+    const ots = p[1], w = parseInt(p[2], 10);
+    if (!['TW', 'WC'].includes(ots) || ![16, 32, 256].includes(w)) return null;
+    return buildUxmss(ots, w);
+  }
+  if (p[0] === 'xmssmt' && p.length === 5) {
+    const ots = p[1], w = parseInt(p[2], 10);
+    const h = parseInt(p[3], 10), d = parseInt(p[4], 10);
+    if (!['TW', 'WC'].includes(ots) || ![16, 32, 256].includes(w)) return null;
+    if (!Number.isInteger(h) || h < 2 || h > 60 ||
+        !Number.isInteger(d) || d < 1 || h % d !== 0) return null;
+    return buildXmssMt(ots, h, d, w);
+  }
+  return null;
+}
+
+function writeStatefulHash() {
+  const parts = [];
+  const keys = state.candidates.slice(1).map(c => c.key).filter(Boolean);
+  if (keys.join(',') !== DEFAULT_CAND_KEYS.join(',')) parts.push('cand=' + keys.join(','));
+  if (HASH_X_KEYS.some(k => sweepState.X[k] !== SWEEP_DEFAULTS_X[k]))
+    parts.push('b=' + HASH_X_KEYS.map(k => sweepState.X[k]).join(','));
+  if (HASH_W_KEYS.some(k => sweepState.W[k] !== SWEEP_DEFAULTS_W[k]))
+    parts.push('w=' + HASH_W_KEYS.map(k => sweepState.W[k]).join(','));
+  if (sweepState.sort.col !== 'distance' || sweepState.sort.dir !== 'asc')
+    parts.push('sort=' + sweepState.sort.col + '.' + sweepState.sort.dir);
+  history.replaceState(null, '',
+    parts.length ? '#' + parts.join('&') : location.pathname + location.search);
+}
+
+function applyStatefulHash() {
+  const raw = location.hash.replace(/^#/, '');
+  if (!raw) return;
+  const params = {};
+  for (const part of raw.split('&')) {
+    const eq = part.indexOf('=');
+    if (eq > 0) params[part.slice(0, eq)] = decodeURIComponent(part.slice(eq + 1));
+  }
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  if (params.b) {
+    const v = params.b.split(',').map(parseFloat);
+    if (v.length === 6 && v.every(isFinite)) {
+      sweepState.X.size = clamp(v[0], 0.10, 1.00);
+      sweepState.X.kg = clamp(v[1], 0.10, 20.00);
+      sweepState.X.sg = clamp(v[2], 0.10, 20.00);
+      sweepState.X.sv = clamp(v[3], 0.10, 20.00);
+      sweepState.X.cb = clamp(v[4], 0.10, 20.00);
+      sweepState.X.minQs = clamp(Math.round(v[5]), 0, 40);
+    }
+  }
+  if (params.w) {
+    const v = params.w.split(',').map(parseFloat);
+    if (v.length === 5 && v.every(isFinite))
+      HASH_W_KEYS.forEach((k, i) => sweepState.W[k] = clamp(v[i], 0.10, 10.00));
+  }
+  if (params.sort) {
+    const [col, dir] = params.sort.split('.');
+    if (SWEEP_COLS.some(c => c.field === col) && ['asc', 'desc'].includes(dir))
+      sweepState.sort = { col, dir };
+  }
+  if (params.cand !== undefined) {
+    const seen = new Set();
+    const cands = [];
+    for (const key of params.cand.split(',').filter(Boolean)) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const c = candidateFromKey(key);
+      if (c) cands.push(c);
+    }
+    state.candidates = [state.candidates[0], ...cands];
+  }
+}
+
+function exportSweepCSV() {
+  const std = state.candidates[0].metrics;
+  const header = ['scheme', 'label', 'max_sigs', 'size_B', 'keygen_C', 'siggen_C',
+    'sigver_C', 'sigver_worst_C', 'c_per_byte', 'c_per_byte_worst', 'distance'];
+  const lines = [header.join(',')];
+  for (const f of sweepState.lastSurvivors) {
+    const c = f.cached, m = c.metrics;
+    lines.push([c.scheme, '"' + c.label + '"',
+      m.qsLog2 !== null ? '2^' + m.qsLog2 : m.qsExact,
+      m.size, m.keygen, m.siggen, m.sigver, m.sigverWorst,
+      (m.sigver / m.size).toFixed(6), (m.sigverWorst / m.size).toFixed(6),
+      sweepDistance(m, std, sweepState.W).toFixed(6)].join(','));
+  }
+  const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `stateful_candidates_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function setupAddForm() {
   const showBtn = document.getElementById('show-add');
   const form = document.getElementById('add-form');
@@ -1277,6 +1392,7 @@ function setupAddForm() {
 function render() {
   renderComparison();
   if (SWEEP_FACTORIES.length > 0) renderSweepTable();
+  else writeStatefulHash();
 }
 
 //  Init
@@ -1295,11 +1411,25 @@ async function init() {
   SITE_DATA = await loadSiteData();
   if (SITE_DATA) selfCheckStateful(SITE_DATA);
   state.candidates = defaultCandidates();
+  applyStatefulHash();   // may replace the comparison list, bounds, weights, sort
   setupAddForm();
   render();              // initial pass paints the comparison
   buildSweepPool();      // sweep generation depends on the SLH baseline
   renderSweepFilters();
   renderSweepTable();    // first paint of the sweep table
+
+  document.getElementById('share-btn').addEventListener('click', async e => {
+    writeStatefulHash();
+    const btn = e.target;
+    try {
+      await navigator.clipboard.writeText(location.href);
+      btn.textContent = 'Link copied ✓';
+      setTimeout(() => { btn.textContent = 'Copy shareable link'; }, 1500);
+    } catch (err) {
+      prompt('Copy this link:', location.href);
+    }
+  });
+  document.getElementById('sweep-export').addEventListener('click', exportSweepCSV);
 }
 init();
 </script>
