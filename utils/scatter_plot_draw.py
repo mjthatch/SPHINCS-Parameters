@@ -122,7 +122,7 @@ def generate_constrained_scatter_plots(csv_path, output_dir, max_zoom=20.0):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate Constrained Scatter Plots for SLH-DSA parameters.")
-    parser.add_argument("--input", type=str, default="outputs_specialized/cat1_extremes/all_size_capped_candidates.csv", help="Path to the target CSV database.")
+    parser.add_argument("--input", type=str, default="all_size_capped_candidates.csv", help="Path to the target CSV database.")
     parser.add_argument("--outdir", type=str, default="scatter_constrained", help="Directory to save the generated scatter images.")
     parser.add_argument("--zoom", type=float, default=5.0, help="Maximum multiplier to display on axes (default: 20.0).")
     args = parser.parse_args()

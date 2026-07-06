@@ -182,6 +182,54 @@
       color: var(--accent);
     }
 
+    .seg {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .seg button {
+      flex: 1 1 auto;
+      padding: 5px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text-soft);
+    }
+
+    .seg button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .seg button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .mode-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--text-soft);
+      margin: 6px 0 2px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .mode-toggle input {
+      accent-color: var(--accent);
+      margin: 0;
+    }
+
     .funnel-row {
       display: grid;
       grid-template-columns: 200px 1fr 80px;
@@ -533,15 +581,23 @@
       Interactive search over SLH-DSA-compatible parameter tuples.
       Methodology from the <a href="report.pdf" target="_blank">SHRINCS Parameter
         Search</a> tech report.
+      See also: <a href="stateful.html">Stateful Scheme Comparison →</a>
     </p>
   </header>
 
   <main class="layout">
 
     <aside class="panel sidebar">
-      <h2>Filter coefficients</h2>
+      <h2>Scheme</h2>
+      <p class="hint" id="scheme-hint">FTS/OTS variant from the report. All ratios compare against the SLH-DSA-128s (SPX) baseline.</p>
+      <div class="seg" id="scheme-controls"></div>
+
+      <h2 class="section-title">Filter coefficients</h2>
       <p class="hint">Bound each metric as a coefficient of SLH-DSA-128s. Survivors must satisfy every bound.</p>
       <div id="filter-controls"></div>
+      <label class="mode-toggle" title="Filter and rank on worst-case SigVer and ρ, compared against the baseline's worst case (SLH-DSA-128s: 4,123 C instead of 2,387 C). WOTS+C verification is deterministic, so those candidates keep the same values but gain headroom against the worst-case baseline.">
+        <input type="checkbox" id="worst-toggle"> use worst-case SigVer &amp; ρ
+      </label>
 
       <h2 class="section-title">Importance weights</h2>
       <p class="hint">Higher weight = more important. Each metric's ratio is <strong>range-normalised across the
@@ -549,6 +605,8 @@
       <div id="weight-controls"></div>
 
       <button class="reset-btn" id="reset-btn">Reset to defaults</button>
+      <button class="reset-btn" id="share-btn" title="Copy a link that reproduces the current scheme, filters, weights and custom tuple">Copy shareable link</button>
+      <button class="reset-btn" id="export-btn" title="Download the current survivor set (with distances) as CSV">Export survivors (CSV)</button>
     </aside>
 
     <section>
@@ -582,7 +640,8 @@
 
       <div class="panel">
         <h2>Compare your own candidate</h2>
-        <p class="hint">Enter any (h, d, k, a, w) tuple to see how it stacks up against SLH-DSA-128s.</p>
+        <p class="hint">Enter any (h, d, k, a, w) tuple to see how it stacks up against SLH-DSA-128s.
+          This panel always evaluates the plain SPX model (WOTS-TW + FORS), regardless of the scheme selected above.</p>
         <div class="custom-inputs" id="custom-inputs">
           <div class="field"><label>h</label><input type="number" id="cust-h" value="63" min="1" step="1"></div>
           <div class="field"><label>d</label><input type="number" id="cust-d" value="7" min="1" step="1"></div>
@@ -721,14 +780,17 @@
     const STD_M = metrics(STD);
 
     // ---------- Sweep ----------
-    // Parameter ranges from the report
+    // Canonical grid — must match the report (Sec. 2) and slhdsa-2to40.sage defaults:
+    //   h in [40, 50], d in [2, 25] with d | h, k in [6, 24], a in [8, 20], w in {16, 32, 256}.
+    // k >= 6 because with a <= 20 and h <= 50 any k <= 5 falls short of the
+    // 128-bit security floor at q_s = 2^40, so smaller k never survives anyway.
     function sweep() {
       const candidates = [];
-      for (let h = 40; h <= 52; h++) {
-        for (let d = 2; d <= 26; d++) {
+      for (let h = 40; h <= 50; h++) {
+        for (let d = 2; d <= 25; d++) {
           if (h % d !== 0) continue;
-          for (let k = 2; k <= 25; k++) {
-            for (let a = 8; a <= 21; a++) {
+          for (let k = 6; k <= 24; k++) {
+            for (let a = 8; a <= 20; a++) {
               for (const w of [16, 32, 256]) {
                 const p = { h, d, k, a, w };
                 const m = metrics(p);
@@ -789,11 +851,10 @@
     }
 
     /**
-     * Compute bit security against FORS subset-forgery for q_s = 2^q_s_log2 signatures.
-     * Returns floor(min(8·hashbytes, -log2(forgery_probability))) — i.e., capped by
-     * the hash preimage bound. hashbytes=16 ⇒ 128-bit cap.
+     * FORS subset-forgery exponent -log2(forgery probability) for
+     * q_s = 2^q_s_log2 signatures (uncapped).
      */
-    function computeSecurityBits(q_s_log2, h, k, a, hashbytes = 16) {
+    function forsForgeryExponent(q_s_log2, h, k, a) {
       const q_s = Math.pow(2, q_s_log2);
       const t = Math.pow(2, a);
       const log2_p = -h;
@@ -812,7 +873,15 @@
         if (isFinite(log2_contrib)) log2_sigma = _log2SumExp(log2_sigma, log2_contrib);
         if (r > Math.max(lambda, 5) && log2_contrib < -500) break;
       }
-      return Math.min(8 * hashbytes, -log2_sigma);
+      return -log2_sigma;
+    }
+
+    /**
+     * Bit security: the forgery exponent capped by the hash preimage bound.
+     * hashbytes=16 ⇒ 128-bit cap.
+     */
+    function computeSecurityBits(q_s_log2, h, k, a, hashbytes = 16) {
+      return Math.min(8 * hashbytes, forsForgeryExponent(q_s_log2, h, k, a));
     }
 
     // Report's q_s = 2^40
@@ -828,6 +897,34 @@
     const MAX_SIZE = 7856;
     function passesInitial(c) {
       return passesSecurity(c) && c.size < MAX_SIZE;
+    }
+
+    // ---------- Canonical data (data.json) ----------
+    // The pools are normally loaded from site/data.json, generated by
+    // export_site_data.sage: SPX from the same sweep CSV as the report, the
+    // W+C / FORS+C / PORS+FP variants computed by costs.sage. The formulas
+    // above stay for the custom-candidate panel (SPX model) and as a
+    // fallback, and are cross-checked against the loaded SPX pool at startup.
+    function poolFromData(data, scheme) {
+      const p = data.pools[scheme];
+      const idx = Object.fromEntries(p.fields.map((f, i) => [f, i]));
+      return p.rows.map(r => {
+        const c = {
+          h: r[idx.h], d: r[idx.d], k: r[idx.k], a: r[idx.a], w: r[idx.w],
+          swn: r[idx.swn], mmax: r[idx.mmax],
+          size: r[idx.size], kg: r[idx.kg], sg: r[idx.sg],
+          sv: r[idx.sv], sv_worst: r[idx.sv_worst],
+        };
+        c.cb = c.sv / c.size;
+        c.cb_worst = c.sv_worst / c.size;
+        return c;
+      });
+    }
+
+    // Metric accessor honouring the worst-case mode: SigVer and ρ switch to
+    // their worst-case variants; size/kg/sg are message-independent.
+    function mkey(k) {
+      return state.useWorst && (k === 'sv' || k === 'cb') ? k + '_worst' : k;
     }
 
     // ---------- Filter pipeline ----------
@@ -847,18 +944,20 @@
       const stepCounts = [{ name: 'Initial pool', count: pool.length }];
       let cur = pool;
       FILTER_STEPS.forEach((step, idx) => {
-        const stdVal = STD_M[step.metric];
+        const mk = mkey(step.metric);
+        const stdVal = STD_M[mk];
         const next = [];
         for (const c of cur) {
-          if (c[step.metric] <= X[step.key] * stdVal) {
+          if (c[mk] <= X[step.key] * stdVal) {
             next.push(c);
           } else {
             if (eliminatedAt.get(c) === null) eliminatedAt.set(c, idx);
           }
         }
         cur = next;
+        const worstTag = (mk !== step.metric) ? ' (worst)' : '';
         stepCounts.push({
-          name: `${step.label} ≤ ${X[step.key].toFixed(2)}·std`,
+          name: `${step.label}${worstTag} ≤ ${X[step.key].toFixed(2)}·std`,
           count: cur.length
         });
       });
@@ -874,9 +973,10 @@
     function computeRanges(survivors) {
       const ranges = {};
       METRIC_KEYS.forEach(key => {
-        const stdVal = STD_M[key];
+        const mk = mkey(key);
+        const stdVal = STD_M[mk];
         if (!survivors.length) { ranges[key] = { min: 0, max: 1 }; return; }
-        const vals = survivors.map(c => c[key] / stdVal);
+        const vals = survivors.map(c => c[mk] / stdVal);
         const lo = Math.min(...vals), hi = Math.max(...vals);
         ranges[key] = { min: lo, max: hi === lo ? lo + 1 : hi }; // avoid /0
       });
@@ -893,7 +993,8 @@
       let dist2 = 0;
       METRIC_KEYS.forEach(key => {
         const wKey = key; // same key names in W
-        const ratio = c[key] / STD_M[key];
+        const mk = mkey(key);
+        const ratio = c[mk] / STD_M[mk];
         const { min, max } = ranges[key];
         const norm = (ratio - min) / (max - min); // in [0,1] for survivors
         dist2 += p[wKey] * norm * norm;
@@ -908,6 +1009,10 @@
     const state = {
       candidates: [],
       initialPool: [],
+      siteData: null,          // parsed data.json (null in fallback mode)
+      pools: {},               // scheme -> candidate pool
+      scheme: 'SPX',
+      useWorst: false,         // filter/rank on worst-case SigVer & ρ
       X: { ...DEFAULTS_X },
       W: { ...DEFAULTS_W },
       // Live filter results (refreshed every update)
@@ -1190,6 +1295,7 @@
         <p class="winner-tuple">(${winner.h}, ${winner.d}, ${winner.k}, ${winner.a}, ${winner.w})</p>
         <p class="winner-distance">Weighted distance: <strong>${d.toFixed(4)}</strong></p>
         <p class="winner-distance">h' = h/d = ${(winner.h / winner.d).toFixed(0)} per XMSS layer</p>
+        ${winner.swn ? `<p class="winner-distance">S<sub>wn</sub> = ${winner.swn}${winner.mmax ? ` · mmax = ${winner.mmax}` : ''}</p>` : ''}
       </div>
       <div>
         <table class="metrics">
@@ -1223,6 +1329,7 @@
       state.lastWinner = winner;
       renderScatter(eliminatedAt, survivors, winner);
       renderWinner(winner);
+      writeHash();
     }
 
     // ---------- Hover tooltip ----------
@@ -1275,7 +1382,7 @@
         : '';
 
       tt.innerHTML = `
-    <p class="tt-tuple">(${c.h}, ${c.d}, ${c.k}, ${c.a}, ${c.w})</p>
+    <p class="tt-tuple">(${c.h}, ${c.d}, ${c.k}, ${c.a}, ${c.w})${c.swn ? ` <span style="font-size:11px;color:var(--text-soft);">S<sub>wn</sub>=${c.swn}${c.mmax ? `, mmax=${c.mmax}` : ''}</span>` : ''}</p>
     <div class="tt-status ${st.cls}">${st.text}</div>
     <table>
       <thead><tr><td></td><td>target</td><td>std</td><td>ratio</td></tr></thead>
@@ -1352,6 +1459,7 @@
       const v = validateCustom(p);
       const statusEl = document.getElementById('custom-status');
       const resultEl = document.getElementById('custom-result');
+      writeHash();
 
       if (!v.valid) {
         statusEl.className = 'custom-status invalid';
@@ -1362,6 +1470,17 @@
 
       // Compute metrics
       const m = metrics(p);
+
+      // Guard against overflow: 2^(h/d) exceeds double precision for h' ≳ 1024,
+      // and the model stops being meaningful long before that.
+      if (!isFinite(m.kg) || !isFinite(m.sg)) {
+        statusEl.className = 'custom-status invalid';
+        statusEl.innerHTML = `<strong>Out of range.</strong> h' = h/d = ${(p.h / p.d).toFixed(0)} ` +
+          `is too large — the 2<sup>h'</sup> per-layer tree cost overflows this model. ` +
+          `Reduce h or increase d.`;
+        resultEl.innerHTML = '';
+        return;
+      }
 
       // Status banner
       if (v.warnings.length) {
@@ -1393,10 +1512,12 @@
 
       const hp = p.h / p.d;
       const wotsL = wotsLen(STD.n, p.w);
-      const secBits = v.secBits !== undefined ? v.secBits : computeSecurityBits(Q_S_LOG2, p.h, p.k, p.a);
-      const secLabel = secBits >= 128
-        ? `<span style="color:var(--good);">≥ 128 bits ✓</span>`
-        : `<span style="color:var(--bad);">${secBits.toFixed(1)} bits</span>`;
+      const secRaw = forsForgeryExponent(Q_S_LOG2, p.h, p.k, p.a);
+      const rawTxt = secRaw > 300 ? '&gt; 300' : secRaw.toFixed(1);
+      const secLabel = secRaw >= 128
+        ? `<span style="color:var(--good);">128 bits ✓</span> <span style="color:var(--text-mute);font-size:11px;">` +
+          `(FORS-forgery exponent ≈ ${rawTxt} — capped by the 2<sup>−128</sup> preimage bound)</span>`
+        : `<span style="color:var(--bad);">${secRaw.toFixed(1)} bits</span>`;
 
       resultEl.innerHTML = `
     <div class="winner-grid">
@@ -1447,30 +1568,226 @@
     }
 
     // ---------- Setup ----------
-    function setup() {
-      state.candidates = sweep();
-      state.initialPool = state.candidates.filter(passesInitial);
-
-      // Assign stable scatter positions
-      const rand = mulberry32(69421);
-      for (const c of state.initialPool) {
-        c._sx = rand();
-        c._sy = rand();
+    async function loadSiteData() {
+      try {
+        const resp = await fetch('data.json', { cache: 'no-cache' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return await resp.json();
+      } catch (e) {
+        console.warn('data.json unavailable (' + e.message + ') — computing the pool in-browser as fallback.');
+        return null;
       }
+    }
 
-      document.getElementById('initial-info').innerHTML =
-        `Sweep: <strong>${state.candidates.length.toLocaleString()}</strong> tuples · ` +
-        `<strong>${state.initialPool.length.toLocaleString()}</strong> pass the initial bounds ` +
-        `(≥ 128-bit security at q<sub>s</sub> = 2⁴⁰, size &lt; 7,856 B). ` +
-        `<span style="opacity:0.65;font-size:11px;">` +
-        `Security computed via the FORS subset-forgery analysis ported from the report's ` +
-        `<a href="https://github.com/BlockstreamResearch/SPHINCS-Parameters/blob/main/security.sage" style="color:inherit;">security.sage</a>.` +
-        `</span>`;
+    // Cross-check the loaded data against the local formulas: the baseline
+    // plus a sample of pool rows. Any divergence is a bug in one of the two
+    // implementations — log it loudly.
+    function selfCheckData(data, pool) {
+      const KEYS = ['size', 'kg', 'sg', 'sv', 'sv_worst'];
+      let bad = 0;
+      const b = data.baseline;
+      if (KEYS.some(k => STD_M[k] !== b[k])) {
+        bad++; console.error('data.json baseline disagrees with local formulas:', b, STD_M);
+      }
+      const step = Math.max(1, Math.floor(pool.length / 25));
+      for (let i = 0; i < pool.length; i += step) {
+        const c = pool[i];
+        const m = metrics(c);
+        if (KEYS.some(k => m[k] !== c[k])) {
+          bad++; console.error('data.json row disagrees with local formulas:', c, m);
+        }
+      }
+      if (bad === 0) console.log('data.json self-check passed (baseline + sampled rows match local formulas).');
+      return bad === 0;
+    }
 
+    // ---------- Schemes ----------
+    const SCHEME_LABELS = { 'SPX': 'SPX', 'W+C': 'W+C', 'W+C_F+C': 'FORS+C', 'W+C_P+FP': 'PORS+FP' };
+    const SCHEME_TITLES = {
+      'SPX': 'Plain SLH-DSA structure: WOTS-TW + FORS',
+      'W+C': 'WOTS+C (grinding counter instead of checksum chains) + FORS',
+      'W+C_F+C': 'WOTS+C + FORS+C (grinding removes the last FORS tree)',
+      'W+C_P+FP': 'WOTS+C + PORS+FP (single tree with Octopus authentication)',
+    };
+    const SCHEME_IDS = { 'SPX': 'spx', 'W+C': 'wc', 'W+C_F+C': 'fc', 'W+C_P+FP': 'pfp' };
+    const SCHEME_FROM_ID = Object.fromEntries(Object.entries(SCHEME_IDS).map(([k, v]) => [v, k]));
+
+    function renderSchemeButtons() {
+      const host = document.getElementById('scheme-controls');
+      const schemes = state.siteData ? state.siteData.meta.schemes : ['SPX'];
+      host.innerHTML = schemes.map(s =>
+        `<button class="${s === state.scheme ? 'active' : ''}" data-scheme="${s}"
+                 title="${SCHEME_TITLES[s]}">${SCHEME_LABELS[s]}</button>`).join('');
+      host.querySelectorAll('button').forEach(b =>
+        b.addEventListener('click', () => activateScheme(b.dataset.scheme)));
+      if (!state.siteData) {
+        document.getElementById('scheme-hint').innerHTML =
+          'Variants need <code>data.json</code> (unavailable — SPX computed in-browser).';
+      }
+    }
+
+    function renderInfoStrip() {
+      const d = state.siteData;
+      const pool = state.initialPool;
+      const bounds = `(≥ 128-bit security at q<sub>s</sub> = 2⁴⁰, size &lt; 7,856 B)`;
+      let html;
+      if (d) {
+        const pm = d.pools[state.scheme];
+        html =
+          `Scheme: <strong>${SCHEME_LABELS[state.scheme]}</strong> · ` +
+          `<strong>${pm.considered.toLocaleString()}</strong> tuples swept · ` +
+          `<strong>${pool.length.toLocaleString()}</strong> pass the initial bounds ${bounds}. ` +
+          `<span style="opacity:0.65;font-size:11px;">` +
+          `Data: <code>data.json</code> (generated ${d.meta.generated}, commit ${d.meta.commit}); ` +
+          `security via the FORS / PORS+FP subset-forgery analysis of the report's ` +
+          `<a href="https://github.com/BlockstreamResearch/SPHINCS-Parameters/blob/main/security.sage" style="color:inherit;">security.sage</a>.` +
+          `</span>`;
+      } else {
+        html =
+          `Scheme: <strong>SPX</strong> · ` +
+          `<strong>${state.candidates.length.toLocaleString()}</strong> tuples · ` +
+          `<strong>${pool.length.toLocaleString()}</strong> pass the initial bounds ${bounds}. ` +
+          `<span style="opacity:0.65;font-size:11px;">Pool computed in-browser ` +
+          `(data.json unavailable — scheme variants disabled).</span>`;
+      }
+      document.getElementById('initial-info').innerHTML = html;
+    }
+
+    function activateScheme(scheme) {
+      if (!state.pools[scheme] || scheme === state.scheme) return;
+      state.scheme = scheme;
+      state.initialPool = state.pools[scheme];
+      renderSchemeButtons();
+      renderInfoStrip();
+      update();
+    }
+
+    // ---------- URL state (shareable views) ----------
+    const HASH_KEYS = ['size', 'kg', 'sg', 'sv', 'cb'];
+    const CUSTOM_IDS = ['cust-h', 'cust-d', 'cust-k', 'cust-a', 'cust-w'];
+    const CUSTOM_DEFAULTS = '63,7,14,12,16';
+
+    function writeHash() {
+      const parts = [];
+      if (state.scheme !== 'SPX') parts.push('s=' + SCHEME_IDS[state.scheme]);
+      if (HASH_KEYS.some(k => state.X[k] !== DEFAULTS_X[k]))
+        parts.push('x=' + HASH_KEYS.map(k => state.X[k]).join(','));
+      if (HASH_KEYS.some(k => state.W[k] !== DEFAULTS_W[k]))
+        parts.push('w=' + HASH_KEYS.map(k => state.W[k]).join(','));
+      if (state.useWorst) parts.push('wc=1');
+      const cust = CUSTOM_IDS.map(id => document.getElementById(id).value).join(',');
+      if (cust !== CUSTOM_DEFAULTS) parts.push('c=' + cust);
+      const url = parts.length
+        ? '#' + parts.join('&')
+        : location.pathname + location.search;
+      history.replaceState(null, '', url);
+    }
+
+    function applyHash() {
+      const raw = location.hash.replace(/^#/, '');
+      if (!raw) return;
+      const params = {};
+      for (const part of raw.split('&')) {
+        const eq = part.indexOf('=');
+        if (eq > 0) params[part.slice(0, eq)] = decodeURIComponent(part.slice(eq + 1));
+      }
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      const setVec = (str, store, loSize) => {
+        const vals = (str || '').split(',').map(parseFloat);
+        if (vals.length !== 5 || !vals.every(isFinite)) return;
+        HASH_KEYS.forEach((k, i) => {
+          store[k] = (k === 'size' && loSize)
+            ? clamp(vals[i], 0.30, 1.00)
+            : clamp(vals[i], 0.10, 20.00);
+        });
+      };
+      if (params.s && SCHEME_FROM_ID[params.s] && state.pools[SCHEME_FROM_ID[params.s]]) {
+        state.scheme = SCHEME_FROM_ID[params.s];
+        state.initialPool = state.pools[state.scheme];
+      }
+      if (params.x) setVec(params.x, state.X, true);
+      if (params.w) setVec(params.w, state.W, false);
+      if (params.wc === '1') state.useWorst = true;
+      if (params.c) {
+        const vals = params.c.split(',').map(v => parseInt(v, 10));
+        if (vals.length === 5 && vals.every(Number.isFinite)) {
+          CUSTOM_IDS.forEach((id, i) => document.getElementById(id).value = vals[i]);
+        }
+      }
+    }
+
+    // ---------- CSV export ----------
+    function exportSurvivorsCSV() {
+      const header = ['scheme', 'h', 'd', 'k', 'a', 'w', 'swn', 'mmax', 'size',
+        'keygen_C', 'sign_C', 'verify_C', 'verify_worst_C',
+        'c_per_byte', 'c_per_byte_worst', 'distance'];
+      const lines = [header.join(',')];
+      for (const c of state.lastSurvivors) {
+        lines.push([state.scheme, c.h, c.d, c.k, c.a, c.w, c.swn || 0, c.mmax || 0,
+          c.size, c.kg, c.sg, c.sv, c.sv_worst,
+          c.cb.toFixed(6), c.cb_worst.toFixed(6),
+          weightedDistance(c, state.W).toFixed(6)].join(','));
+      }
+      const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `survivors_${SCHEME_IDS[state.scheme]}_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function setup() {
+      const data = await loadSiteData();
+      state.siteData = data;
+      if (data) {
+        data.meta.schemes.forEach((s, si) => {
+          const pool = poolFromData(data, s);
+          const rand = mulberry32(69421 + si);   // stable layout per scheme
+          for (const c of pool) { c._sx = rand(); c._sy = rand(); }
+          state.pools[s] = pool;
+        });
+        selfCheckData(data, state.pools['SPX']);
+      } else {
+        state.candidates = sweep();
+        const pool = state.candidates.filter(passesInitial);
+        const rand = mulberry32(69421);
+        for (const c of pool) { c._sx = rand(); c._sy = rand(); }
+        state.pools['SPX'] = pool;
+      }
+      state.initialPool = state.pools[state.scheme];
+
+      applyHash();               // may switch scheme, X/W, worst mode, custom tuple
       renderControls();
+      document.getElementById('worst-toggle').checked = state.useWorst;
+      renderSchemeButtons();
+      renderInfoStrip();
       update();
       attachScatterHover();
       attachCustomCandidate();
+
+      document.getElementById('worst-toggle').addEventListener('change', e => {
+        state.useWorst = e.target.checked;
+        update();
+      });
+      document.getElementById('share-btn').addEventListener('click', async e => {
+        writeHash();
+        const btn = e.target;
+        try {
+          await navigator.clipboard.writeText(location.href);
+          btn.textContent = 'Link copied ✓';
+          setTimeout(() => { btn.textContent = 'Copy shareable link'; }, 1500);
+        } catch (err) {
+          prompt('Copy this link:', location.href);
+        }
+      });
+      document.getElementById('export-btn').addEventListener('click', exportSurvivorsCSV);
+
+      // Re-render the scatter when the canvas CSS size changes
+      window.addEventListener('resize', () => {
+        if (state.lastEliminatedAt) {
+          renderScatter(state.lastEliminatedAt, state.lastSurvivors, state.lastWinner);
+        }
+      });
     }
 
     setup();

@@ -131,17 +131,21 @@ def compute_wots_l(scheme, w):
     Compute WOTS chain count l based on scheme type.
 
     For WOTS-TW (plain): l = l1 + l2
-        l1 = n / log2(w)           -- message chains
-        l2 = ceil(log_w(l1*(w-1))) -- checksum chains
+        l1 = ceil(8n / log2(w))              -- message chains (FIPS 205 Sec. 5)
+        l2 = floor(log_w(l1*(w-1))) + 1      -- checksum chains (FIPS 205 Sec. 5)
 
     For WOTS+C: l = l1 (no checksum chains, replaced by counter)
+
+    Note: l1 must round UP. For w=16 and w=256 the division is exact,
+    but w=32 needs 26 chains (26*5 = 130 >= 128 bits); floor division
+    would give 25 chains, which cannot encode a 128-bit digest.
     """
     if scheme == "SPX":
-        l1 = hashbytes*8//log(w,2)
-        l2 = ceil(log(l1*(w-1), 2)/log(w, 2))
+        l1 = ceil(hashbytes*8/log(w,2))
+        l2 = floor(log(l1*(w-1), 2)/log(w, 2)) + 1
         return l1 + l2
     else:
-        return hashbytes*8//log(w,2)
+        return ceil(hashbytes*8/log(w,2))
 
 def compute_wots_tw_worst_steps(l1, l2, w):
     """
@@ -203,9 +207,20 @@ def compute_pors_tree_geometry(k, a):
     extra_leaves = t - 2**subtree_height
     return t, subtree_height, extra_leaves
 
+_interleave_table_cache = {}
+
 def log2_exp_work_from_mmax(t, k, mmax):
-    """Look up log2 of expected work for PORS+FP grinding given mmax."""
-    table = dict(interleave_cost_table(t, k))
+    """Look up log2 of expected work for PORS+FP grinding given mmax.
+
+    The (t, k) tables are cached: compute_mmax probes several mmax values per
+    parameter set, and sweeps revisit the same (k, a) pairs for every (h, d) —
+    without the cache a full PORS+FP sweep rebuilds each table thousands of times.
+    """
+    key = (int(t), int(k))
+    table = _interleave_table_cache.get(key)
+    if table is None:
+        table = dict(interleave_cost_table(*key))
+        _interleave_table_cache[key] = table
     if mmax in table:
         return table[mmax]
     lowers = [m for m in table if m <= mmax]
@@ -478,12 +493,18 @@ def compute_verification_time(h, d, a, k, w, swn, scheme, mmax=0):
     if has_wc:
         # WOTS+C: chain positions sum to S_{w,n}, so remaining steps = (w-1)*l - S_{w,n}
         # Plus: verify counter hash (Th1c) and compress public key (Thl)
+        # Deterministic: worst case == average case.
         h_wots = (w-1)*l - swn + 2
         c_wots = ((w-1)*l - swn)*C_Th1 + C_Th1c + Thl
+        c_wots_worst = c_wots
     else:  # Plain WOTS
         # Expected chain position is (w-1)/2, so expected remaining steps = (w-1)*l/2
         h_wots = (w-1)*l//2 + 1
         c_wots = (w-1)*l//2*C_Th1 + Thl
+        # Worst case (all message digits 0): see compute_wots_tw_worst_steps.
+        l1 = ceil(hashbytes*8/log(w,2))
+        l2 = floor(log(l1*(w-1), 2)/log(w, 2)) + 1
+        c_wots_worst = compute_wots_tw_worst_steps(l1, l2, w)*C_Th1 + Thl
 
     # FTS verification
     if scheme == "W+C_F+C":
@@ -501,9 +522,12 @@ def compute_verification_time(h, d, a, k, w, swn, scheme, mmax=0):
         c_fts = k*C_Th1 + k*a*C_Th2 + Thk
 
     # Total: Hmsg + FTS + d*WOTS + h auth path nodes
+    # The FTS and auth-path costs are message-independent, so the worst case
+    # differs from the average only in the WOTS-TW chain walks.
     return {
         'hashes': 1 + h_fts + d*h_wots + h,
         'compressions': C_Hmsg + c_fts + d*c_wots + h*C_Th2,
+        'compressions_worst': C_Hmsg + c_fts + d*c_wots_worst + h*C_Th2,
     }
 
 # =============================================================================
@@ -527,6 +551,7 @@ def compute_all_results():
         keygen_compressions = compute_keygen_time(h, d, w, scheme)
         size = compute_size(h, d, a, k, w, scheme, sign['mmax'])
         compressions_per_byte = float(verify['compressions']) / float(size)
+        compressions_per_byte_worst = float(verify['compressions_worst']) / float(size)
 
         results.append({
             'scheme': scheme,
@@ -546,7 +571,9 @@ def compute_all_results():
             'worst_search': sign['worst_search'],
             'verify_hashes': verify['hashes'],
             'verify_compressions': verify['compressions'],
+            'verify_compressions_worst': verify['compressions_worst'],
             'compressions_per_byte': compressions_per_byte,
+            'compressions_per_byte_worst': compressions_per_byte_worst,
             'bold': bold,
         })
     return results
@@ -554,11 +581,11 @@ def compute_all_results():
 
 def generate_csv():
     """Generate CSV output for all parameter sets."""
-    print("scheme,q_s,h,d,a,k,w,l,paramsum,size,keygen_compressions,sign_hashes,sign_compressions,exp_search,worst_search,verify_hashes,verify_compressions,compressions_per_byte,bold")
+    print("scheme,q_s,h,d,a,k,w,l,paramsum,size,keygen_compressions,sign_hashes,sign_compressions,exp_search,worst_search,verify_hashes,verify_compressions,verify_compressions_worst,compressions_per_byte,compressions_per_byte_worst,bold")
 
     for r in compute_all_results():
         bold_str = "True" if r['bold'] else "False"
-        print(f"{r['scheme']},2^{r['q_s']},{r['h']},{r['d']},{r['a']},{r['k']},{r['w']},{r['l']},{r['swn']},{r['size']},{r['keygen_compressions']},{r['sign_hashes']},{r['sign_compressions']},{r['exp_search']},{r['worst_search']},{r['verify_hashes']},{r['verify_compressions']},{r['compressions_per_byte']:.2f},{bold_str}")
+        print(f"{r['scheme']},2^{r['q_s']},{r['h']},{r['d']},{r['a']},{r['k']},{r['w']},{r['l']},{r['swn']},{r['size']},{r['keygen_compressions']},{r['sign_hashes']},{r['sign_compressions']},{r['exp_search']},{r['worst_search']},{r['verify_hashes']},{r['verify_compressions']},{r['verify_compressions_worst']},{r['compressions_per_byte']:.2f},{r['compressions_per_byte_worst']:.2f},{bold_str}")
 
 
 def format_num(n):
@@ -666,11 +693,14 @@ def compute_single(scheme, q_s_log2, h, d, a, k, w, swn):
     print("Size:       " + str(int(size)) + " bytes")
     print("Keygen(C):  " + format_num(keygen_compressions))
     print("Sign(C):    " + format_num(sign['compressions']))
-    print("Verify(C):  " + format_num(verify['compressions']))
-    print("C/byte:     " + "{:.2f}".format(c_per_byte))
+    print("Verify(C):  " + format_num(verify['compressions']) + "  (worst: " + format_num(verify['compressions_worst']) + ")")
+    print("C/byte:     " + "{:.2f}".format(c_per_byte) + "  (worst: " + "{:.2f}".format(float(verify['compressions_worst'])/float(size)) + ")")
 
 
-if __name__ == "__main__":
+# The env flag lets other scripts (stateful.sage, export_site_data.sage) load
+# this file for its functions without triggering the CLI output (sage's
+# load() executes in the caller's namespace, where __name__ is '__main__').
+if __name__ == "__main__" and not os.environ.get("COSTS_SAGE_NO_MAIN"):
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "--table":

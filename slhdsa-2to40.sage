@@ -13,7 +13,7 @@ Supported (ots, fts) combinations:
   (wots+c, pors+fp)  -> W+C_P+FP
 
 Sweep behavior per OTS:
-  - wots-tw : w in {16, 32}, swn = 0
+  - wots-tw : w in {16, 32, 256}, swn = 0
   - wots+c  : (w, swn) in {(16, 240), (256, 2040)}
 
 Filters (defaults; override via CLI):
@@ -22,6 +22,7 @@ Filters (defaults; override via CLI):
   --max-sign-ratio X       Reject if sign    > X * std sign       (default: no limit)
   --max-verify-ratio X     Reject if verify  > X * std verify     (default: no limit)
   --max-c-per-byte X       Reject if verify_C / size > X          (default: no limit)
+  --max-cpb-ratio X        Reject if verify_C / size > X * std C/byte (default: no limit)
 
 Sweep ranges (comma-separated lists):
   --h N1,N2,...            Hypertree heights to sweep            (default: 40..50 inclusive)
@@ -53,6 +54,7 @@ def _parse_args(argv):
     sg_ratio = float('inf')
     sv_ratio = float('inf')
     cpb_max  = float('inf')
+    cpb_ratio = float('inf')
     h_values = list(range(40, 51))   # 40..50 inclusive
     d_values = list(range(2, 26))    # 2..25 inclusive
     i = 1
@@ -79,6 +81,9 @@ def _parse_args(argv):
         elif a == "--max-c-per-byte" and i + 1 < len(argv):
             cpb_max = float(argv[i + 1])
             i += 2
+        elif a == "--max-cpb-ratio" and i + 1 < len(argv):
+            cpb_ratio = float(argv[i + 1])
+            i += 2
         elif a == "--h" and i + 1 < len(argv):
             h_values = _parse_int_list(argv[i + 1])
             i += 2
@@ -92,11 +97,11 @@ def _parse_args(argv):
             print("Unknown argument: {}".format(a), file=sys.stderr)
             print("Use --help for usage.", file=sys.stderr)
             sys.exit(2)
-    return ots, fts, max_size, kg_ratio, sg_ratio, sv_ratio, cpb_max, h_values, d_values
+    return ots, fts, max_size, kg_ratio, sg_ratio, sv_ratio, cpb_max, cpb_ratio, h_values, d_values
 
 (OTS, FTS, MAX_SIZE,
  MAX_KEYGEN_RATIO, MAX_SIGN_RATIO, MAX_VERIFY_RATIO,
- MAX_C_PER_BYTE, H_VALUES, D_VALUES) = _parse_args(sys.argv)
+ MAX_C_PER_BYTE, MAX_CPB_RATIO, H_VALUES, D_VALUES) = _parse_args(sys.argv)
 
 SCHEME_MAP = {
     ("wots-tw", "fors"):    "SPX",
@@ -179,7 +184,9 @@ def evaluate(q_s_log2, h, d, k, a, w, swn, scheme, security_model):
         'keygen_C': float(keygen_C),
         'sign_C':   float(sign['compressions']),
         'verify_C': float(verify['compressions']),
+        'verify_worst_C': float(verify['compressions_worst']),
         'c_per_byte': float(verify['compressions']) / float(size),
+        'c_per_byte_worst': float(verify['compressions_worst']) / float(size),
         'label':    '',
     }
 
@@ -195,6 +202,9 @@ std['label'] = 'STANDARD'
 KEYGEN_LIMIT = std['keygen_C'] * MAX_KEYGEN_RATIO
 SIGN_LIMIT   = std['sign_C']   * MAX_SIGN_RATIO
 VERIFY_LIMIT = std['verify_C'] * MAX_VERIFY_RATIO
+# Effective C/byte cap: min of the absolute cap and the ratio cap (relative to
+# the std baseline computed above — avoids hardcoding a stale constant).
+CPB_LIMIT    = min(MAX_C_PER_BYTE, std['c_per_byte'] * MAX_CPB_RATIO)
 
 print("Standard baseline (compressions):", file=sys.stderr)
 print("  Keygen: {:.0f} C  (limit: {:.0f} C)".format(std['keygen_C'], KEYGEN_LIMIT), file=sys.stderr)
@@ -226,7 +236,7 @@ def consider(r, label):
     if r['verify_C'] > VERIFY_LIMIT:
         rejected['verify'] += 1
         return
-    if r['c_per_byte'] > MAX_C_PER_BYTE:
+    if r['c_per_byte'] > CPB_LIMIT:
         rejected['c_per_byte'] += 1
         return
     r['label'] = label
@@ -317,7 +327,7 @@ def _cpb_str(x):
 print("  Filters: size < {} B, keygen {}, sign {}, verify {}, C/byte {}  ".format(
     MAX_SIZE,
     _ratio_str(MAX_KEYGEN_RATIO), _ratio_str(MAX_SIGN_RATIO), _ratio_str(MAX_VERIFY_RATIO),
-    _cpb_str(MAX_C_PER_BYTE)
+    _cpb_str(CPB_LIMIT)
 ).center(total_width))
 print("  All costs in SHA-256 compression-function calls  ".center(total_width))
 print("=" * total_width)
@@ -368,10 +378,10 @@ print(" Rejected (size >= {} B):         {}".format(MAX_SIZE, rejected['size']))
 print("{}{}".format(_rej_label("keygen", MAX_KEYGEN_RATIO), rejected['keygen']))
 print("{}{}".format(_rej_label("sign",   MAX_SIGN_RATIO),   rejected['sign']))
 print("{}{}".format(_rej_label("verify", MAX_VERIFY_RATIO), rejected['verify']))
-if MAX_C_PER_BYTE == float('inf'):
+if CPB_LIMIT == float('inf'):
     print(" Rejected (C/byte > no limit):     {}".format(rejected['c_per_byte']))
 else:
-    print(" Rejected (C/byte > {:g}):           {}".format(MAX_C_PER_BYTE, rejected['c_per_byte']))
+    print(" Rejected (C/byte > {:g}):           {}".format(CPB_LIMIT, rejected['c_per_byte']))
 print(" Passed all filters (custom):      {}".format(len(all_results) - 1))
 print()
 
@@ -445,9 +455,9 @@ print("\nSaving candidate configurations to {}...".format(csv_filename))
 
 # Define the exact dictionary keys returned by evaluate()
 fieldnames = [
-    'label', 'h', 'd', 'h_prime', 'k', 'a', 'w', 'l', 
-    'swn', 'mmax', 'security', 'size', 'keygen_C', 
-    'sign_C', 'verify_C', 'c_per_byte'
+    'label', 'h', 'd', 'h_prime', 'k', 'a', 'w', 'l',
+    'swn', 'mmax', 'security', 'size', 'keygen_C',
+    'sign_C', 'verify_C', 'verify_worst_C', 'c_per_byte', 'c_per_byte_worst'
 ]
 
 with open(csv_filename, 'w', newline='') as f:

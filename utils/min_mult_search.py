@@ -81,10 +81,8 @@ def find_global_x_thresholds(csv_path, output_csv):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find smallest common X for all metrics filter and save to CSV.")
-    parser.add_argument("--input", type=str, default="outputs_specialized/cat1_extremes/all_size_capped_candidates.csv", help="Input candidates CSV")
-    
-    # Default output path now perfectly aligns with Category 4 structural expectations
-    parser.add_argument("--output", type=str, default="outputs_specialized/cat4_minimax/global_X_thresholds.csv", help="Output CSV filename")
+    parser.add_argument("--input", type=str, default="all_size_capped_candidates.csv", help="Input candidates CSV")
+    parser.add_argument("--output", type=str, default="global_X_thresholds.csv", help="Output CSV filename")
     
     args = parser.parse_args()
     

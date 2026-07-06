@@ -1,0 +1,303 @@
+{
+ "_comment": "Golden values frozen 2026-07-05 after the audit; every number was cross-validated against costs.sage/stateful.sage output, the published CSVs, and both site pages.",
+ "wots_len": {
+  "16": 35,
+  "32": 28,
+  "256": 18
+ },
+ "wots_len_wc": {
+  "16": 32,
+  "32": 26,
+  "256": 16
+ },
+ "swn": {
+  "16": 240,
+  "32": 403,
+  "256": 2040
+ },
+ "baseline": {
+  "role": "STANDARD baseline",
+  "size": 7856,
+  "kg": 292862,
+  "sg": 2279391,
+  "sv": 2387,
+  "sv_worst": 4123
+ },
+ "csv_rows": {
+  "all_size_capped_candidates.csv": 9183,
+  "all_unbound_candidates.csv": 19438
+ },
+ "stateless": {
+  "63,7,14,12,16": {
+   "role": "STANDARD baseline",
+   "size": 7856,
+   "kg": 292862,
+   "sg": 2279391,
+   "sv": 2387,
+   "sv_worst": 4123
+  },
+  "50,2,6,20,256": {
+   "role": "Smallest Signature",
+   "size": 3408,
+   "kg": 154887258110,
+   "sg": 309799682039,
+   "sv": 4953,
+   "sv_worst": 9033
+  },
+  "40,10,9,17,32": {
+   "role": "Fastest Keygen",
+   "size": 7728,
+   "kg": 14494,
+   "sg": 4863521,
+   "sv": 4820,
+   "sv_worst": 8850
+  },
+  "40,8,23,8,32": {
+   "role": "Fastest Signing",
+   "size": 7552,
+   "kg": 28990,
+   "sg": 255437,
+   "sv": 4016,
+   "sv_worst": 7240
+  },
+  "50,2,7,17,16": {
+   "role": "Fastest Verification",
+   "size": 3952,
+   "kg": 19193135102,
+   "sg": 38389940213,
+   "sv": 894,
+   "sv_worst": 1390
+  },
+  "50,2,23,15,16": {
+   "role": "Best C/Byte",
+   "size": 7824,
+   "kg": 19193135102,
+   "sg": 38389284825,
+   "sv": 1366,
+   "sv_worst": 1862
+  },
+  "45,5,10,13,16": {
+   "role": "Report Candidate 1",
+   "size": 5776,
+   "kg": 292862,
+   "sg": 1791978,
+   "sv": 1726,
+   "sv_worst": 2966
+  },
+  "45,5,8,16,16": {
+   "role": "Report Candidate 2 / UXMSS ref",
+   "size": 5712,
+   "kg": 292862,
+   "sg": 3561453,
+   "sv": 1719,
+   "sv_worst": 2959
+  },
+  "40,5,24,8,16": {
+   "role": "Balanced (X=0.8842)",
+   "size": 6912,
+   "kg": 146430,
+   "sg": 756689,
+   "sv": 1857,
+   "sv_worst": 3097
+  },
+  "40,5,19,9,16": {
+   "role": "Weighted case 1 winner",
+   "size": 6496,
+   "kg": 146430,
+   "sg": 771034,
+   "sv": 1809,
+   "sv_worst": 3049
+  },
+  "40,5,13,12,16": {
+   "role": "Weighted case 2 winner",
+   "size": 6160,
+   "kg": 146430,
+   "sg": 945124,
+   "sv": 1771,
+   "sv_worst": 3011
+  },
+  "40,4,9,16,16": {
+   "role": "Normalized winner (S3.5)",
+   "size": 5344,
+   "kg": 585726,
+   "sg": 4702189,
+   "sv": 1470,
+   "sv_worst": 2462
+  },
+  "45,5,12,11,16": {
+   "role": "Regular-weighted winner (S3.5)",
+   "size": 5840,
+   "kg": 292862,
+   "sg": 1562598,
+   "sv": 1732,
+   "sv_worst": 2972
+  }
+ },
+ "stateful": {
+  "uxmss": {
+   "TW,16": {
+    "hsf": 320,
+    "sz_q1": 594,
+    "sz_max": 5698,
+    "kg": 183610,
+    "sg": 301,
+    "sv_max": 914,
+    "sv_max_worst": 1162
+   },
+   "TW,32": {
+    "hsf": 327,
+    "sz_q1": 482,
+    "sz_max": 5698,
+    "kg": 297166,
+    "sg": 466,
+    "sv_max": 1098,
+    "sv_max_worst": 1501
+   },
+   "TW,256": {
+    "hsf": 337,
+    "sz_q1": 322,
+    "sz_max": 5698,
+    "kg": 1560206,
+    "sg": 2317,
+    "sv_max": 2977,
+    "sv_max_worst": 5017
+   },
+   "WC,16": {
+    "hsf": 323,
+    "sz_q1": 550,
+    "sz_max": 5702,
+    "kg": 169450,
+    "sg": 351,
+    "sv_max": 898,
+    "sv_max_worst": 898
+   },
+   "WC,32": {
+    "hsf": 329,
+    "sz_q1": 454,
+    "sz_max": 5702,
+    "kg": 277858,
+    "sg": 560,
+    "sv_max": 1072,
+    "sv_max_worst": 1072
+   },
+   "WC,256": {
+    "hsf": 339,
+    "sz_q1": 294,
+    "sz_max": 5702,
+    "kg": 1395018,
+    "sg": 2814,
+    "sv_max": 2726,
+    "sv_max_worst": 2726
+   }
+  },
+  "xmssmt": {
+   "TW,20,1,16": {
+    "size": 899,
+    "kg": 599785470,
+    "sg": 11741,
+    "sv": 314,
+    "sv_worst": 562
+   },
+   "WC,10,1,16": {
+    "size": 694,
+    "kg": 535550,
+    "sg": 5581,
+    "sv": 272,
+    "sv_worst": 272
+   },
+   "TW,20,2,32": {
+    "size": 1235,
+    "kg": 927742,
+    "sg": 18586,
+    "sv": 926,
+    "sv_worst": 1732
+   },
+   "WC,40,5,256": {
+    "size": 1961,
+    "kg": 1050366,
+    "sg": 166934,
+    "sv": 10312,
+    "sv_worst": 10312
+   },
+   "TW,40,10,16": {
+    "size": 6261,
+    "kg": 9150,
+    "sg": 23181,
+    "sv": 2802,
+    "sv_worst": 5282
+   }
+  }
+ },
+ "site_pool_count": 9182,
+ "variants": {
+  "W+C|44,4,8,16,16,240": {
+   "size": 4960,
+   "kg": 1071102,
+   "sg": 6381815,
+   "sv": 1357,
+   "sv_worst": 1357
+  },
+  "W+C|40,5,11,14,256,2040": {
+   "size": 4596,
+   "kg": 1050366,
+   "sg": 5976457,
+   "sv": 10635,
+   "sv_worst": 10635
+  },
+  "W+C|40,5,11,14,256,2840": {
+   "size": 4596,
+   "kg": 1050366,
+   "sg": 6123432,
+   "sv": 6635,
+   "sv_worst": 6635
+  },
+  "W+C_F+C|44,4,8,16,16,240": {
+   "size": 4688,
+   "kg": 1071102,
+   "sg": 6381813,
+   "sv": 1324,
+   "sv_worst": 1324
+  },
+  "W+C_F+C|40,5,11,14,256,2040": {
+   "size": 4356,
+   "kg": 1050366,
+   "sg": 5976455,
+   "sv": 10606,
+   "sv_worst": 10606
+  },
+  "W+C_F+C|20,2,10,15,256,2040": {
+   "size": 3160,
+   "kg": 4201470,
+   "sg": 9715143,
+   "sv": 4416,
+   "sv_worst": 4416
+  },
+  "W+C_P+FP|44,4,8,16,16,240": {
+   "size": 4464,
+   "kg": 1071102,
+   "sg": 6869634,
+   "sv": 1292,
+   "sv_worst": 1292
+  },
+  "W+C_P+FP|40,5,11,14,256,2040": {
+   "size": 4020,
+   "kg": 1050366,
+   "sg": 6419013,
+   "sv": 10559,
+   "sv_worst": 10559
+  },
+  "W+C_P+FP|24,2,8,16,16,240": {
+   "size": 3112,
+   "kg": 2142206,
+   "sg": 6869506,
+   "sv": 752,
+   "sv_worst": 752
+  }
+ },
+ "variant_pool_counts": {
+  "W+C": 6666,
+  "W+C_F+C": 7077,
+  "W+C_P+FP": 7746
+ },
+ "_comment_variants": "variants: frozen from a real `sage costs.sage` CSV run; variant_pool_counts: frozen from the mpmath-verified 2026-07-05 generation (0 security pass/fail flips on the canonical grid)."
+}

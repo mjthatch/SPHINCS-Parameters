@@ -19,8 +19,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-STD_SIZE = 7856
-STD_CPB = 0.32815
+STD_SIZE = 7856  # FIPS 205 SLH-DSA-128s signature size
+# NOTE: the C/byte cap is passed to the Sage script as a RATIO
+# (--max-cpb-ratio), which the script resolves against the standard
+# baseline it computes itself — no hardcoded std C/byte constant here.
 
 # =============================================================================
 # Global Configuration Toggles
@@ -36,7 +38,7 @@ CAT3_DIR = os.path.join(BASE_DIR, "cat3_speed_optimized")
 for d in [CAT1_DIR, CAT2_DIR, CAT3_DIR]:
     os.makedirs(d, exist_ok=True)
 
-def run_basic_sweep(max_size=STD_SIZE, kg_r="inf", sg_r="inf", sv_r="inf", cpb_max="inf"):
+def run_basic_sweep(max_size=STD_SIZE, kg_r="inf", sg_r="inf", sv_r="inf", cpb_r="inf"):
     """Runs the Sage script strictly for basic wots-tw and fors architecture under given filter caps."""
     cmd = [
         "sage", "slhdsa-2to40.sage",
@@ -46,7 +48,7 @@ def run_basic_sweep(max_size=STD_SIZE, kg_r="inf", sg_r="inf", sv_r="inf", cpb_m
         "--max-keygen-ratio", str(kg_r),
         "--max-sign-ratio", str(sg_r),
         "--max-verify-ratio", str(sv_r),
-        "--max-c-per-byte", str(cpb_max)
+        "--max-cpb-ratio", str(cpb_r)
     ]
     
     res = subprocess.run(cmd, stdout=subprocess.DEVNULL)
@@ -159,7 +161,7 @@ def run_category_2(factors):
         os.makedirs(folder_path, exist_ok=True)
         
         print(f"-> Sweeping for Smallest Size (Size <= Std) with All Times <= {x}x Standard...")
-        df_pool = run_basic_sweep(max_size=STD_SIZE, kg_r=x, sg_r=x, sv_r=x, cpb_max=STD_CPB*x)
+        df_pool = run_basic_sweep(max_size=STD_SIZE, kg_r=x, sg_r=x, sv_r=x, cpb_r=x)
         
         if len(df_pool) <= 1:
             print(f"   [!] No custom candidates pass operational caps at {x}x std.")
@@ -189,19 +191,19 @@ def run_category_3(factors):
             "sub_dir": "fastest_keygen", 
             "target_col": "keygen_C", 
             "title": "Fastest Keygen", 
-            "kg": "inf", "sg": lambda x: x, "sv": lambda x: x, "cpb": lambda x: STD_CPB * x
+            "kg": "inf", "sg": lambda x: x, "sv": lambda x: x, "cpb": lambda x: x
         },
         {
             "sub_dir": "fastest_signing", 
             "target_col": "sign_C", 
             "title": "Fastest Signing", 
-            "kg": lambda x: x, "sg": "inf", "sv": lambda x: x, "cpb": lambda x: STD_CPB * x
+            "kg": lambda x: x, "sg": "inf", "sv": lambda x: x, "cpb": lambda x: x
         },
         {
             "sub_dir": "fastest_verification", 
             "target_col": "verify_C", 
             "title": "Fastest Verification", 
-            "kg": lambda x: x, "sg": lambda x: x, "sv": "inf", "cpb": lambda x: STD_CPB * x
+            "kg": lambda x: x, "sg": lambda x: x, "sv": "inf", "cpb": lambda x: x
         },
         {
             "sub_dir": "best_compression_ratio", 
@@ -224,7 +226,7 @@ def run_category_3(factors):
             kg_ratio = t["kg"] if isinstance(t["kg"], str) else t["kg"](x)
             sg_ratio = t["sg"] if isinstance(t["sg"], str) else t["sg"](x)
             sv_ratio = t["sv"] if isinstance(t["sv"], str) else t["sv"](x)
-            cpb_limit = t["cpb"] if isinstance(t["cpb"], str) else t["cpb"](x)
+            cpb_ratio = t["cpb"] if isinstance(t["cpb"], str) else t["cpb"](x)
             
             print(f"-> Optimizing {t['title']} | Size <= Std, Other Overheads <= {x}x...")
             df_pool = run_basic_sweep(
@@ -232,7 +234,7 @@ def run_category_3(factors):
                 kg_r=kg_ratio, 
                 sg_r=sg_ratio, 
                 sv_r=sv_ratio, 
-                cpb_max=cpb_limit
+                cpb_r=cpb_ratio
             )
             
             if len(df_pool) <= 1:
