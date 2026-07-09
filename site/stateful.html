@@ -304,7 +304,7 @@
       <label>Scheme
         <select id="f-scheme">
           <option value="xmssmt">XMSS / XMSS-MT</option>
-          <option value="uxmss">UXMSS (right-skewed)</option>
+          <option value="uxmss">UXMSS (left-leaning)</option>
         </select>
       </label>
       <label>OTS family
@@ -335,8 +335,9 @@
 
     <h2 style="margin-top: 20px;">Comparison table</h2>
     <p class="hint">All cost columns are SHA-256 compression-function calls. Cost ratios under each value compare against SLH-DSA-128s.
-      UXMSS signatures grow with the signature index q: the size column shows the q=1 → q=hsf range, and all
-      ratios, filters and verification costs use the worst case (q = hsf).</p>
+      UXMSS signatures grow with the signature index: the size column shows the first→largest range, and all
+      ratios, filters and verification costs use the worst case (hsf auth nodes, reached by the last two of
+      the hsf+1 signatures).</p>
     <div class="compare-wrap">
       <table class="compare" id="compare-table"></table>
     </div>
@@ -507,7 +508,7 @@ function xmssMtVerifyC(h, d, w, swn, ots, worstCase) {
   return C_Hmsg + d * treeVerifyC(h / d, w, swn, ots, worstCase);
 }
 
-//  UXMSS (right-skewed) 
+//  UXMSS (left-leaning)
 function uxmssIdxBytes(hsf) {
   if (hsf <= 0) return 1;
   return Math.max(1, Math.ceil(Math.log2(hsf + 1) / 8));
@@ -637,12 +638,13 @@ function buildUxmss(ots, w) {
     scheme: 'UXMSS',
     canRemove: true,
     hsf,
-    sub: `sig grows with q — worst case (q = hsf = ${hsf}) shown`,
+    sub: `sig grows with index — worst case shown (${hsf} auth nodes); capacity ${hsf + 1} sigs`,
     metrics: {
-      // UXMSS signatures grow with the signature index q: the q-th signature
-      // carries min(q, hsf) auth nodes. The binding design constraint is the
-      // WORST case (q = hsf), matching sz_max / verify_max_* in stateful.sage;
-      // sizeQ1 keeps the best case (q = 1) for the range display.
+      // UXMSS signatures grow with the signature index: the signature with
+      // index i \in (1...hsf+1) carries min(i, hsf) auth nodes, so the last two
+      // are the largest. The binding design constraint is that worst case,
+      // matching sz_max / verify_max_* in stateful.sage; sizeQ1 keeps the
+      // first-signature size for the range display.
       size: uxmssSize(hsf, hsf, w, ots),
       sizeQ1: uxmssSize(1, hsf, w, ots),
       keygen: uxmssKeygenC(hsf, w, ots),
@@ -687,7 +689,7 @@ function candFromUxmssRec(rec, idx) {
     scheme: 'UXMSS',
     canRemove: true,
     hsf,
-    sub: `sig grows with q — worst case (q = hsf = ${hsf}) shown`,
+    sub: `sig grows with index — worst case shown (${hsf} auth nodes); capacity ${hsf + 1} sigs`,
     metrics: {
       size: rec[idx.sz_max], sizeQ1: rec[idx.sz_q1],
       keygen: rec[idx.kg], siggen: rec[idx.sg],

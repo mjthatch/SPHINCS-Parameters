@@ -17,12 +17,11 @@ signature-count targets: 2^20 and 2^40.
    - No FORS/FTS needed: state prevents replay attacks.
    - Signature size grows with d (more layers → more XMSS layer sigs).
 
-3. SHRINCS/UXMSS: Right-skewed unbalanced Merkle tree (SHRINCS stateful)
-   - Right-skewed tree with hsf+1 leaves;
-   - q-th sig includes min(q,hsf) auth nodes.
-   - Signature size grows linearly with q (unlike XMSS-MT which is constant).
-   - Target is strictly isolated to 2^40 signatures, hardcoded to use 
-     Candidate 2 (5,712 bytes) as the reference bound for max stateful size.
+3. SHRINCS/UXMSS: Left-leaning unbalanced Merkle tree (SHRINCS stateful)
+   - Tree of height hsf with hsf+1 leaves; capacity = hsf + 1 signature.
+   - The signature with index i \in (1...hsf+1) carries min(i, hsf) auth nodes.
+   - Signature size grows linearly with the index (XMSS-MT: constant).
+   - Target is strictly isolated to 2^40 signatures, hardcoded to use (5,712 bytes) as the reference bound.
 
 OTS variants:
   WOTS-classic  Original Winternitz OTS; no tweaks; l = l1 + l2 chains.
@@ -548,7 +547,7 @@ def print_uxmss_table(rows_by_h, refs):
     W = sum(c[1] for c in cols) + len(cols) - 1
     print()
     print("="*W)
-    print(" SHRINCS/UXMSS — Right-skewed Stateful Tree ".center(W, "="))
+    print(" SHRINCS/UXMSS — Left-leaning Stateful Tree ".center(W, "="))
     print(" OTS: WOTS-classic / WOTS-TW / WOTS+C  |  w ∈ {16,32,256} ".center(W, "="))
     print(" max stateful sig must be strictly < Ref ".center(W, "="))
     print("="*W)
