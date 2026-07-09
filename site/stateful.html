@@ -270,6 +270,25 @@
   .row-add:disabled { opacity: 0.4; cursor: not-allowed; }
   .row-add:disabled:hover { background: transparent; color: var(--text-soft); border-color: var(--border); }
 
+  /* Signer-mode selector (cached/BDS vs stateless-recompute) */
+  .signer-mode {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-soft);
+  }
+  .signer-mode select {
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--panel);
+  }
+  .signer-mode select:focus { outline: none; border-color: var(--accent); }
+
   @media (max-width: 600px) {
     body { padding: 12px; }
     h1 { font-size: 18px; }
@@ -297,7 +316,14 @@
     <div class="actions">
       <button class="btn" id="show-add">+ Add candidate</button>
       <button class="btn btn-ghost" id="reset-defaults">Reset to defaults</button>
-      <button class="btn btn-ghost" id="share-btn" title="Copy a link that reproduces the current comparison list, bounds, weights and sort">Copy shareable link</button>
+      <button class="btn btn-ghost" id="share-btn" title="Copy a link that reproduces the current comparison list, signer mode, bounds, weights and sort">Copy shareable link</button>
+      <label class="signer-mode" title="cached (BDS): the signer keeps tree state — amortised treehash updates per signature. stateless-recompute: no cached tree material, trees are rebuilt per signature. SLH-DSA is stateless by design, so its SigGen is identical in both modes.">
+        Signer:
+        <select id="signer-mode">
+          <option value="cached">cached (BDS state)</option>
+          <option value="cold">stateless-recompute</option>
+        </select>
+      </label>
     </div>
 
     <form class="add-form" id="add-form" hidden>
@@ -337,7 +363,9 @@
     <p class="hint">All cost columns are SHA-256 compression-function calls. Cost ratios under each value compare against SLH-DSA-128s.
       UXMSS signatures grow with the signature index: the size column shows the first→largest range, and all
       ratios, filters and verification costs use the worst case (hsf auth nodes, reached by the last two of
-      the hsf+1 signatures).</p>
+      the hsf+1 signatures).
+      The <strong>Signer</strong> selector switches SigGen between the cached signer (BDS-amortised, tree state
+      kept between signatures) and a state-minimized signer that rebuilds its trees per signature.</p>
     <div class="compare-wrap">
       <table class="compare" id="compare-table"></table>
     </div>
@@ -505,6 +533,10 @@ function xmssMtSignBdsC(h, d, w, swn, ots) {
   const cSg = wotsSignC(w, swn, ots);
   return C_Hmsg + C_PRFmsg + cSg + d * (hPrime * pk + hPrime * C_Th2);
 }
+function xmssMtSignColdC(h, d, w, swn, ots) {
+  // State-minimized signer: rebuild d trees of height h' per signature.
+  return C_Hmsg + C_PRFmsg + d * (treeKeygenC(h / d, w, ots) + wotsSignC(w, swn, ots));
+}
 function xmssMtVerifyC(h, d, w, swn, ots, worstCase) {
   return C_Hmsg + d * treeVerifyC(h / d, w, swn, ots, worstCase);
 }
@@ -600,6 +632,7 @@ function buildSLH() {
       size: s ? s.size : m.size,
       keygen: s ? s.kg : m.kg,
       siggen: s ? s.sg : m.sg,
+      siggenCold: s ? s.sg : m.sg,
       sigver: s ? s.sv : m.sv,
       sigverWorst: s ? s.sv_worst : m.svWorst,
       // FIPS 205 capacity for SLH-DSA-128s is 2^64 signatures; the report
@@ -622,6 +655,7 @@ function buildXmssMt(ots, h, d, w) {
       size: xmssMtSize(h, d, w, ots),
       keygen: xmssMtKeygenC(h, d, w, ots),
       siggen: xmssMtSignBdsC(h, d, w, swn, ots),
+      siggenCold: xmssMtSignColdC(h, d, w, swn, ots),
       sigver: xmssMtVerifyC(h, d, w, swn, ots, false),
       sigverWorst: xmssMtVerifyC(h, d, w, swn, ots, true),
       qsLog2: h,
@@ -651,6 +685,7 @@ function buildUxmss(ots, w) {
       sizeQ1: uxmssSize(1, hsf, w, ots),
       keygen: uxmssKeygenC(hsf, w, ots),
       siggen: uxmssSignC(w, swn, ots),
+      siggenCold: uxmssSignC(w, swn, ots) + uxmssKeygenC(hsf, w, ots),
       sigver: uxmssVerifyC(hsf, hsf, w, swn, ots, false),
       sigverWorst: uxmssVerifyC(hsf, hsf, w, swn, ots, true),
       qsLog2: null,
@@ -666,6 +701,10 @@ function buildUxmss(ots, w) {
 // the loaded data at startup.
 let SITE_DATA = null;
 
+// Signer mode: 'cached' or 'cold'. Affects SigGen only.
+let SIGNER_MODE = 'cached';
+function sigGenOf(m) { return SIGNER_MODE === 'cold' ? m.siggenCold : m.siggen; }
+
 function candFromXmssMtRec(rec, idx) {
   const [ots, h, d, w] = [rec[idx.ots], rec[idx.h], rec[idx.d], rec[idx.w]];
   return {
@@ -676,6 +715,7 @@ function candFromXmssMtRec(rec, idx) {
     canRemove: true,
     metrics: {
       size: rec[idx.size], keygen: rec[idx.kg], siggen: rec[idx.sg],
+      siggenCold: rec[idx.sg_cold],
       sigver: rec[idx.sv], sigverWorst: rec[idx.sv_worst],
       qsLog2: h, qsExact: null,
     },
@@ -695,6 +735,7 @@ function candFromUxmssRec(rec, idx) {
     metrics: {
       size: rec[idx.sz_max], sizeQ1: rec[idx.sz_q1],
       keygen: rec[idx.kg], siggen: rec[idx.sg],
+      siggenCold: rec[idx.sg_cold],
       sigver: rec[idx.sv_max], sigverWorst: rec[idx.sv_max_worst],
       qsLog2: null, qsExact: hsf + 1,
     },
@@ -721,6 +762,7 @@ function selfCheckStateful(data) {
     const r = xrows[i];
     const c = buildXmssMt(r[xi.ots], r[xi.h], r[xi.d], r[xi.w]).metrics;
     if (c.size !== r[xi.size] || c.keygen !== r[xi.kg] || c.siggen !== r[xi.sg] ||
+        c.siggenCold !== r[xi.sg_cold] ||
         c.sigver !== r[xi.sv] || c.sigverWorst !== r[xi.sv_worst]) {
       bad++; console.error('data.json XMSS-MT row disagrees with local formulas:', r, c);
     }
@@ -729,7 +771,8 @@ function selfCheckStateful(data) {
   for (const r of data.stateful.uxmss.rows) {
     const c = buildUxmss(r[ui.ots], r[ui.w]).metrics;
     if (c.size !== r[ui.sz_max] || c.sizeQ1 !== r[ui.sz_q1] || c.keygen !== r[ui.kg] ||
-        c.siggen !== r[ui.sg] || c.sigver !== r[ui.sv_max] || c.sigverWorst !== r[ui.sv_max_worst]) {
+        c.siggen !== r[ui.sg] || c.siggenCold !== r[ui.sg_cold] ||
+        c.sigver !== r[ui.sv_max] || c.sigverWorst !== r[ui.sv_max_worst]) {
       bad++; console.error('data.json UXMSS row disagrees with local formulas:', r, c);
     }
   }
@@ -791,7 +834,8 @@ const state = { candidates: [] };   // filled by init() once data.json is resolv
 const METRIC_COLS = [
   { label: 'Sig size',    value: m => fmtSize(m),                                  ratioField: 'size',    lowerIsBetter: true },
   { label: 'KeyGen (C)',  value: m => fmtCompressions(m.keygen),                   ratioField: 'keygen',  lowerIsBetter: true },
-  { label: 'SigGen (C)',  value: m => fmtCompressions(m.siggen),                   ratioField: 'siggen',  lowerIsBetter: true },
+  { label: () => `SigGen (C, ${SIGNER_MODE === 'cold' ? 'cold' : 'BDS'})`,
+                          value: m => fmtCompressions(sigGenOf(m)),                ratioFn: m => sigGenOf(m), lowerIsBetter: true },
   { label: 'SigVer (C)',  value: m => fmtCompressions(m.sigver),                   ratioField: 'sigver',  lowerIsBetter: true },
   { label: 'C/B (avg)',   value: m => fmtCpb(m.sigver / m.size),                   ratioFn: m => (m.sigver      / m.size),  lowerIsBetter: true },
   { label: 'C/B (worst)', value: m => fmtCpb(m.sigverWorst / m.size),              ratioFn: m => (m.sigverWorst / m.size),  lowerIsBetter: true },
@@ -811,7 +855,10 @@ function renderComparison() {
   // Header: candidate column + one column per metric + actions
   const thead = document.createElement('thead');
   let hr = '<tr><th class="cand-col">Candidate</th>';
-  for (const col of METRIC_COLS) hr += `<th>${col.label}</th>`;
+  for (const col of METRIC_COLS) {
+    const lbl = typeof col.label === 'function' ? col.label() : col.label;
+    hr += `<th>${lbl}</th>`;
+  }
   hr += '<th class="act-col"></th></tr>';
   thead.innerHTML = hr;
 
@@ -976,7 +1023,7 @@ function sweepRatios(m, std) {
   return {
     size: m.size / std.size,
     kg:   m.keygen / std.keygen,
-    sg:   m.siggen / std.siggen,
+    sg:   sigGenOf(m) / sigGenOf(std),
     sv:   m.sigver / std.sigver,
     cb:   (m.sigver / m.size) / (std.sigver / std.size),
   };
@@ -1069,7 +1116,8 @@ function renderSweepFilters() {
 const SWEEP_COLS = [
   { field: 'size',     label: 'Sig size',   value: m => fmtSize(m),                             sortFn: (m) => m.size,                                                  ratioFn: m => m.size,             lowerIsBetter: true },
   { field: 'keygen',   label: 'KeyGen (C)', value: m => fmtCompressions(m.keygen),              sortFn: (m) => m.keygen,                                                ratioFn: m => m.keygen,           lowerIsBetter: true },
-  { field: 'siggen',   label: 'SigGen (C)', value: m => fmtCompressions(m.siggen),              sortFn: (m) => m.siggen,                                                ratioFn: m => m.siggen,           lowerIsBetter: true },
+  { field: 'siggen',   label: () => `SigGen (C, ${SIGNER_MODE === 'cold' ? 'cold' : 'BDS'})`,
+                                            value: m => fmtCompressions(sigGenOf(m)),           sortFn: (m) => sigGenOf(m),                                             ratioFn: m => sigGenOf(m),        lowerIsBetter: true },
   { field: 'sigver',   label: 'SigVer (C)', value: m => fmtCompressions(m.sigver),              sortFn: (m) => m.sigver,                                                ratioFn: m => m.sigver,           lowerIsBetter: true },
   { field: 'cb',       label: 'C/B (avg)',  value: m => fmtCpb(m.sigver / m.size),              sortFn: (m) => m.sigver / m.size,                                       ratioFn: m => m.sigver / m.size,  lowerIsBetter: true },
   { field: 'distance', label: 'Distance',   value: (m, c, std) => sweepDistance(m, std, sweepState.W).toFixed(4),
@@ -1083,10 +1131,10 @@ function renderSweepTable() {
   const survivors = [];
   for (const f of SWEEP_FACTORIES) {
     const m = f.cached.metrics;
-    if (m.size      >  sweepState.X.size * std.size)   continue;
-    if (m.keygen    >  sweepState.X.kg   * std.keygen) continue;
-    if (m.siggen    >  sweepState.X.sg   * std.siggen) continue;
-    if (m.sigver    >  sweepState.X.sv   * std.sigver) continue;
+    if (m.size        >  sweepState.X.size * std.size)        continue;
+    if (m.keygen      >  sweepState.X.kg   * std.keygen)      continue;
+    if (sigGenOf(m)   >  sweepState.X.sg   * sigGenOf(std))   continue;
+    if (m.sigver      >  sweepState.X.sv   * std.sigver)      continue;
     const cbTarget = m.sigver / m.size;
     const cbStd    = std.sigver / std.size;
     if (cbTarget   >  sweepState.X.cb   * cbStd)       continue;
@@ -1127,7 +1175,8 @@ function renderSweepTable() {
   for (const col of SWEEP_COLS) {
     const isActive = sweepState.sort.col === col.field;
     const arrow = isActive ? (sweepState.sort.dir === 'asc' ? '▲' : '▼') : '';
-    hr += `<th class="sortable${isActive ? ' active' : ''}" data-sort="${col.field}">${col.label}<span class="sort-arrow">${arrow}</span></th>`;
+    const lbl = typeof col.label === 'function' ? col.label() : col.label;
+    hr += `<th class="sortable${isActive ? ' active' : ''}" data-sort="${col.field}">${lbl}<span class="sort-arrow">${arrow}</span></th>`;
   }
   hr += '<th class="act-col"></th></tr>';
   thead.innerHTML = hr;
@@ -1237,6 +1286,7 @@ function writeStatefulHash() {
     parts.push('w=' + HASH_W_KEYS.map(k => sweepState.W[k]).join(','));
   if (sweepState.sort.col !== 'distance' || sweepState.sort.dir !== 'asc')
     parts.push('sort=' + sweepState.sort.col + '.' + sweepState.sort.dir);
+  if (SIGNER_MODE !== 'cached') parts.push('m=' + SIGNER_MODE);
   history.replaceState(null, '',
     parts.length ? '#' + parts.join('&') : location.pathname + location.search);
 }
@@ -1271,6 +1321,7 @@ function applyStatefulHash() {
     if (SWEEP_COLS.some(c => c.field === col) && ['asc', 'desc'].includes(dir))
       sweepState.sort = { col, dir };
   }
+  if (params.m === 'cold') SIGNER_MODE = 'cold';
   if (params.cand !== undefined) {
     const seen = new Set();
     const cands = [];
@@ -1286,15 +1337,18 @@ function applyStatefulHash() {
 
 function exportSweepCSV() {
   const std = state.candidates[0].metrics;
-  const header = ['scheme', 'label', 'max_sigs', 'size_B', 'keygen_C', 'siggen_C',
-    'sigver_C', 'sigver_worst_C', 'c_per_byte', 'c_per_byte_worst', 'distance'];
+  const header = ['scheme', 'label', 'max_sigs', 'size_B', 'keygen_C',
+    'siggen_bds_C', 'siggen_cold_C',
+    'sigver_C', 'sigver_worst_C', 'c_per_byte', 'c_per_byte_worst',
+    'signer_mode', 'distance'];
   const lines = [header.join(',')];
   for (const f of sweepState.lastSurvivors) {
     const c = f.cached, m = c.metrics;
     lines.push([c.scheme, '"' + c.label + '"',
       m.qsLog2 !== null ? '2^' + m.qsLog2 : m.qsExact,
-      m.size, m.keygen, m.siggen, m.sigver, m.sigverWorst,
+      m.size, m.keygen, m.siggen, m.siggenCold, m.sigver, m.sigverWorst,
       (m.sigver / m.size).toFixed(6), (m.sigverWorst / m.size).toFixed(6),
+      SIGNER_MODE,
       sweepDistance(m, std, sweepState.W).toFixed(6)].join(','));
   }
   const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
@@ -1415,7 +1469,12 @@ async function init() {
   SITE_DATA = await loadSiteData();
   if (SITE_DATA) selfCheckStateful(SITE_DATA);
   state.candidates = defaultCandidates();
-  applyStatefulHash();   // may replace the comparison list, bounds, weights, sort
+  applyStatefulHash();
+  document.getElementById('signer-mode').value = SIGNER_MODE;
+  document.getElementById('signer-mode').addEventListener('change', e => {
+    SIGNER_MODE = e.target.value === 'cold' ? 'cold' : 'cached';
+    render();
+  });
   setupAddForm();
   render();              // initial pass paints the comparison
   buildSweepPool();      // sweep generation depends on the SLH baseline

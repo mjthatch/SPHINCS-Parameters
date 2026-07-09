@@ -173,6 +173,7 @@ for ots_label, ots_type in (('TW', OTS_TW), ('WC', OTS_WC)):
                     int(xmssmt_size_h(h, d, w, ots_type)),
                     int(xmssmt_keygen_C_h(h, d, w, ots_type)),
                     int(xmssmt_sign_bds_C_h(h, d, w, swn, ots_type)),
+                    int(xmssmt_sign_cold_C_h(h, d, w, swn, ots_type)),
                     int(xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=False)),
                     int(xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=True)),
                 ])
@@ -188,6 +189,7 @@ for ots_label, ots_type in (('TW', OTS_TW), ('WC', OTS_WC)):
             int(uxmss_size(hsf, hsf, w, ots_type)),
             int(uxmss_keygen_C(hsf, w, ots_type)),
             int(uxmss_sign_C(1, hsf, w, swn, ots_type)),
+            int(uxmss_sign_cold_C(hsf, w, swn, ots_type)),
             int(uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=False)),
             int(uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=True)),
         ])
@@ -221,12 +223,13 @@ data = {
                 'sg': baseline['sg'], 'sv': baseline['sv'],
                 'sv_worst': baseline['sv_worst'], 'qs_log2': 64},
         'xmssmt': {
-            'fields': ['ots', 'h', 'd', 'w', 'size', 'kg', 'sg', 'sv', 'sv_worst'],
+            'fields': ['ots', 'h', 'd', 'w', 'size', 'kg', 'sg', 'sg_cold',
+                       'sv', 'sv_worst'],
             'rows': xmssmt_rows,
         },
         'uxmss': {
             'fields': ['ots', 'w', 'hsf', 'sz_q1', 'sz_max', 'kg', 'sg',
-                       'sv_max', 'sv_max_worst'],
+                       'sg_cold', 'sv_max', 'sv_max_worst'],
             'rows': uxmss_rows,
         },
     },

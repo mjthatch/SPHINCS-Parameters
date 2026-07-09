@@ -275,21 +275,22 @@ def test_data_json_stateful():
             d['slh']['sv_worst'], d['slh']['qs_log2']) == \
            (b['size'], b['kg'], b['sg'], b['sv'], b['sv_worst'], 64)
     xi = {f: i for i, f in enumerate(d['xmssmt']['fields'])}
+    XKEYS = ('size', 'kg', 'sg', 'sg_cold', 'sv', 'sv_worst')
     for r in d['xmssmt']['rows']:
         m = M.xmssmt_metrics(r[xi['ots']], r[xi['h']], r[xi['d']], r[xi['w']])
-        got = tuple(r[xi[k]] for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'))
-        want = (m['size'], m['kg'], m['sg'], m['sv'], m['sv_worst'])
+        got = tuple(r[xi[k]] for k in XKEYS)
+        want = tuple(m[k] for k in XKEYS)
         assert got == want, (r[:4], got, want)
+        assert m['sg_cold'] >= m['sg']
     ui = {f: i for i, f in enumerate(d['uxmss']['fields'])}
     assert len(d['uxmss']['rows']) == 6
+    UKEYS = ('hsf', 'sz_q1', 'sz_max', 'kg', 'sg', 'sg_cold', 'sv_max', 'sv_max_worst')
     for r in d['uxmss']['rows']:
         m = M.uxmss_metrics(r[ui['ots']], r[ui['w']])
-        got = tuple(r[ui[k]] for k in
-                    ('hsf', 'sz_q1', 'sz_max', 'kg', 'sg', 'sv_max', 'sv_max_worst'))
-        want = (m['hsf'], m['sz_q1'], m['sz_max'], m['kg'], m['sg'],
-                m['sv_max'], m['sv_max_worst'])
+        got = tuple(r[ui[k]] for k in UKEYS)
+        want = tuple(m[k] for k in UKEYS)
         assert got == want, (r[:2], got, want)
-        assert m['hsf'] <= M.HSF_MAX 
+        assert m['hsf'] <= M.HSF_MAX
 
 
 def test_site_data_integration():

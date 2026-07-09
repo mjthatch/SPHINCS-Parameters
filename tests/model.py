@@ -260,9 +260,11 @@ def xmssmt_metrics(ots, h, d, w):
     pk = wots_pk_c(w, ots)
     kg = 2**hp * pk + (2**hp - 1) * C_TH2
     sg = C_HMSG + C_PRFMSG + wots_sign_c(w, ots) + d * (hp * pk + hp * C_TH2)
+    sg_cold = C_HMSG + C_PRFMSG + d * (kg + wots_sign_c(w, ots))
     sv = C_HMSG + d * (wots_verify_c(w, ots, False) + hp * C_TH2)
     sv_worst = C_HMSG + d * (wots_verify_c(w, ots, True) + hp * C_TH2)
-    return {'size': size, 'kg': kg, 'sg': sg, 'sv': sv, 'sv_worst': sv_worst}
+    return {'size': size, 'kg': kg, 'sg': sg, 'sg_cold': sg_cold,
+            'sv': sv, 'sv_worst': sv_worst}
 
 
 def uxmss_idx_bytes(hsf):
@@ -292,12 +294,15 @@ def uxmss_metrics(ots, w, target_size=5712):
     def size(q):
         return R_SIZE + ctr + l * N + min(q, hsf) * N + uxmss_idx_bytes(hsf)
 
+    kg = (hsf + 1) * wots_pk_c(w, ots) + hsf * C_TH2
+    sg = C_HMSG + C_PRFMSG + wots_sign_c(w, ots)
     return {
         'hsf': hsf,
         'sz_q1': size(1),
         'sz_max': size(hsf),
-        'kg': (hsf + 1) * wots_pk_c(w, ots) + hsf * C_TH2,
-        'sg': C_HMSG + C_PRFMSG + wots_sign_c(w, ots),
+        'kg': kg,
+        'sg': sg,
+        'sg_cold': sg + kg,
         'sv_max': C_HMSG + wots_verify_c(w, ots, False) + hsf * C_TH2,
         'sv_max_worst': C_HMSG + wots_verify_c(w, ots, True) + hsf * C_TH2,
     }
