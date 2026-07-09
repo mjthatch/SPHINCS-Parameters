@@ -365,7 +365,9 @@
       ratios, filters and verification costs use the worst case (hsf auth nodes, reached by the last two of
       the hsf+1 signatures).
       The <strong>Signer</strong> selector switches SigGen between the cached signer (BDS-amortised, tree state
-      kept between signatures) and a state-minimized signer that rebuilds its trees per signature.</p>
+      kept between signatures) and a state-minimized signer that rebuilds its trees per signature.
+      <strong>State</strong> shows the cached signer's memory — UXMSS: all hsf+1 leaf hashes;
+      XMSS/XMSS-MT: a BDS-style estimate; "—" for the stateless SLH-DSA baseline and in state-minimized mode.</p>
     <div class="compare-wrap">
       <table class="compare" id="compare-table"></table>
     </div>
@@ -537,6 +539,15 @@ function xmssMtSignColdC(h, d, w, swn, ots) {
   // State-minimized signer: rebuild d trees of height h' per signature.
   return C_Hmsg + C_PRFmsg + d * (treeKeygenC(h / d, w, ots) + wotsSignC(w, swn, ots));
 }
+function xmssMtStateBytes(h, d, w, ots) {
+  // BDS-style cached-signer state estimate: ~3.5*h' nodes per layer.
+  const hPrime = h / d;
+  return d * Math.ceil(3.5 * hPrime) * N + (d - 1) * wotsL(w, ots) * N;
+}
+function uxmssStateBytes(hsf) {
+  // Cached signer keeps all hsf+1 leaf hashes.
+  return (hsf + 1) * N;
+}
 function xmssMtVerifyC(h, d, w, swn, ots, worstCase) {
   return C_Hmsg + d * treeVerifyC(h / d, w, swn, ots, worstCase);
 }
@@ -656,6 +667,7 @@ function buildXmssMt(ots, h, d, w) {
       keygen: xmssMtKeygenC(h, d, w, ots),
       siggen: xmssMtSignBdsC(h, d, w, swn, ots),
       siggenCold: xmssMtSignColdC(h, d, w, swn, ots),
+      state: xmssMtStateBytes(h, d, w, ots),
       sigver: xmssMtVerifyC(h, d, w, swn, ots, false),
       sigverWorst: xmssMtVerifyC(h, d, w, swn, ots, true),
       qsLog2: h,
@@ -686,6 +698,7 @@ function buildUxmss(ots, w) {
       keygen: uxmssKeygenC(hsf, w, ots),
       siggen: uxmssSignC(w, swn, ots),
       siggenCold: uxmssSignC(w, swn, ots) + uxmssKeygenC(hsf, w, ots),
+      state: uxmssStateBytes(hsf),
       sigver: uxmssVerifyC(hsf, hsf, w, swn, ots, false),
       sigverWorst: uxmssVerifyC(hsf, hsf, w, swn, ots, true),
       qsLog2: null,
@@ -715,7 +728,7 @@ function candFromXmssMtRec(rec, idx) {
     canRemove: true,
     metrics: {
       size: rec[idx.size], keygen: rec[idx.kg], siggen: rec[idx.sg],
-      siggenCold: rec[idx.sg_cold],
+      siggenCold: rec[idx.sg_cold], state: rec[idx.state],
       sigver: rec[idx.sv], sigverWorst: rec[idx.sv_worst],
       qsLog2: h, qsExact: null,
     },
@@ -735,7 +748,7 @@ function candFromUxmssRec(rec, idx) {
     metrics: {
       size: rec[idx.sz_max], sizeQ1: rec[idx.sz_q1],
       keygen: rec[idx.kg], siggen: rec[idx.sg],
-      siggenCold: rec[idx.sg_cold],
+      siggenCold: rec[idx.sg_cold], state: rec[idx.state],
       sigver: rec[idx.sv_max], sigverWorst: rec[idx.sv_max_worst],
       qsLog2: null, qsExact: hsf + 1,
     },
@@ -762,7 +775,7 @@ function selfCheckStateful(data) {
     const r = xrows[i];
     const c = buildXmssMt(r[xi.ots], r[xi.h], r[xi.d], r[xi.w]).metrics;
     if (c.size !== r[xi.size] || c.keygen !== r[xi.kg] || c.siggen !== r[xi.sg] ||
-        c.siggenCold !== r[xi.sg_cold] ||
+        c.siggenCold !== r[xi.sg_cold] || c.state !== r[xi.state] ||
         c.sigver !== r[xi.sv] || c.sigverWorst !== r[xi.sv_worst]) {
       bad++; console.error('data.json XMSS-MT row disagrees with local formulas:', r, c);
     }
@@ -771,7 +784,7 @@ function selfCheckStateful(data) {
   for (const r of data.stateful.uxmss.rows) {
     const c = buildUxmss(r[ui.ots], r[ui.w]).metrics;
     if (c.size !== r[ui.sz_max] || c.sizeQ1 !== r[ui.sz_q1] || c.keygen !== r[ui.kg] ||
-        c.siggen !== r[ui.sg] || c.siggenCold !== r[ui.sg_cold] ||
+        c.siggen !== r[ui.sg] || c.siggenCold !== r[ui.sg_cold] || c.state !== r[ui.state] ||
         c.sigver !== r[ui.sv_max] || c.sigverWorst !== r[ui.sv_max_worst]) {
       bad++; console.error('data.json UXMSS row disagrees with local formulas:', r, c);
     }
@@ -836,6 +849,7 @@ const METRIC_COLS = [
   { label: 'KeyGen (C)',  value: m => fmtCompressions(m.keygen),                   ratioField: 'keygen',  lowerIsBetter: true },
   { label: () => `SigGen (C, ${SIGNER_MODE === 'cold' ? 'cold' : 'BDS'})`,
                           value: m => fmtCompressions(sigGenOf(m)),                ratioFn: m => sigGenOf(m), lowerIsBetter: true },
+  { label: 'State (B)',   value: m => (SIGNER_MODE === 'cold' || m.state === undefined) ? '—' : fmtBytes(m.state) },
   { label: 'SigVer (C)',  value: m => fmtCompressions(m.sigver),                   ratioField: 'sigver',  lowerIsBetter: true },
   { label: 'C/B (avg)',   value: m => fmtCpb(m.sigver / m.size),                   ratioFn: m => (m.sigver      / m.size),  lowerIsBetter: true },
   { label: 'C/B (worst)', value: m => fmtCpb(m.sigverWorst / m.size),              ratioFn: m => (m.sigverWorst / m.size),  lowerIsBetter: true },
@@ -1118,6 +1132,8 @@ const SWEEP_COLS = [
   { field: 'keygen',   label: 'KeyGen (C)', value: m => fmtCompressions(m.keygen),              sortFn: (m) => m.keygen,                                                ratioFn: m => m.keygen,           lowerIsBetter: true },
   { field: 'siggen',   label: () => `SigGen (C, ${SIGNER_MODE === 'cold' ? 'cold' : 'BDS'})`,
                                             value: m => fmtCompressions(sigGenOf(m)),           sortFn: (m) => sigGenOf(m),                                             ratioFn: m => sigGenOf(m),        lowerIsBetter: true },
+  { field: 'state',    label: 'State (B)',  value: m => (SIGNER_MODE === 'cold' || m.state === undefined) ? '—' : fmtBytes(m.state),
+                                                                                                sortFn: (m) => m.state || 0 },
   { field: 'sigver',   label: 'SigVer (C)', value: m => fmtCompressions(m.sigver),              sortFn: (m) => m.sigver,                                                ratioFn: m => m.sigver,           lowerIsBetter: true },
   { field: 'cb',       label: 'C/B (avg)',  value: m => fmtCpb(m.sigver / m.size),              sortFn: (m) => m.sigver / m.size,                                       ratioFn: m => m.sigver / m.size,  lowerIsBetter: true },
   { field: 'distance', label: 'Distance',   value: (m, c, std) => sweepDistance(m, std, sweepState.W).toFixed(4),
@@ -1338,7 +1354,7 @@ function applyStatefulHash() {
 function exportSweepCSV() {
   const std = state.candidates[0].metrics;
   const header = ['scheme', 'label', 'max_sigs', 'size_B', 'keygen_C',
-    'siggen_bds_C', 'siggen_cold_C',
+    'siggen_bds_C', 'siggen_cold_C', 'state_B',
     'sigver_C', 'sigver_worst_C', 'c_per_byte', 'c_per_byte_worst',
     'signer_mode', 'distance'];
   const lines = [header.join(',')];
@@ -1346,7 +1362,8 @@ function exportSweepCSV() {
     const c = f.cached, m = c.metrics;
     lines.push([c.scheme, '"' + c.label + '"',
       m.qsLog2 !== null ? '2^' + m.qsLog2 : m.qsExact,
-      m.size, m.keygen, m.siggen, m.siggenCold, m.sigver, m.sigverWorst,
+      m.size, m.keygen, m.siggen, m.siggenCold, m.state !== undefined ? m.state : '',
+      m.sigver, m.sigverWorst,
       (m.sigver / m.size).toFixed(6), (m.sigverWorst / m.size).toFixed(6),
       SIGNER_MODE,
       sweepDistance(m, std, sweepState.W).toFixed(6)].join(','));

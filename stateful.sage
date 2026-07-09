@@ -258,6 +258,7 @@ def compute_xmss_rows(h):
             keygen_C = xmss_keygen_C_h(h, w, ots_type),
             sign_C   = xmss_sign_C_h(h, w, swn, ots_type),
             sign_cold_C = xmssmt_sign_cold_C_h(h, 1, w, swn, ots_type),
+            state_bytes = xmssmt_state_bytes(h, 1, w, ots_type),
             verify_avg_C   = xmss_verify_C_h(h, w, swn, ots_type, worst_case=False),
             verify_worst_C = xmss_verify_C_h(h, w, swn, ots_type, worst_case=True),
         ))
@@ -309,6 +310,7 @@ def compute_xmssmt_rows(h):
                 keygen_C = xmssmt_keygen_C_h(h, d, w, ots_type),
                 sign_C   = xmssmt_sign_bds_C_h(h, d, w, swn, ots_type),
                 sign_cold_C = xmssmt_sign_cold_C_h(h, d, w, swn, ots_type),
+                state_bytes = xmssmt_state_bytes(h, d, w, ots_type),
                 verify_avg_C   = xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=False),
                 verify_worst_C = xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=True),
             ))
@@ -364,6 +366,19 @@ def uxmss_sign_cold_C(hsf, w, swn, ots_type):
                  + uxmss_keygen_C(hsf, w, ots_type))
 
 
+def uxmss_state_bytes(hsf):
+    """Cached-signer state: all hsf+1 leaf hashes"""
+    return int((hsf + 1) * N)
+
+
+def xmssmt_state_bytes(h, d, w, ots_type):
+    """BDS-style cached-signer state estimate: ~3.5*h' nodes per layer plus the cached
+    upper-layer WOTS signatures. See Buchmann-Dahmen-Schneider,
+    'Merkle Tree Traversal Revisited'."""
+    h_prime = h // d
+    l = wots_l(w, ots_type)
+    return int(d * ceil(3.5 * h_prime) * N + (d - 1) * l * N)
+
 def uxmss_verify_C(q, hsf, w, swn, ots_type, worst_case=False):
     return float(C_Hmsg + wots_verify_C(w, swn, ots_type, worst_case) + min(q, hsf) * C_Th2)
 
@@ -386,6 +401,7 @@ def compute_uxmss_rows(target_size, q_s_log2):
             keygen_C     = uxmss_keygen_C(hsf, w, ots_type),
             sign_q1_C    = uxmss_sign_C(1,   hsf, w, swn, ots_type),
             sign_cold_C  = uxmss_sign_cold_C(hsf, w, swn, ots_type),
+            state_bytes  = uxmss_state_bytes(hsf),
             verify_max_avg_C   = uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=False),
             verify_max_worst_C = uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=True),
         ))
@@ -397,7 +413,8 @@ _CSV_HEADER = [
     "scheme", "q_s_log2", "h_total", "d", "h_prime",
     "ots_type", "w", "swn", "l",
     "size_bytes",
-    "keygen_C", "sign_bds_C", "sign_cold_C", "verify_avg_C", "verify_worst_C",
+    "keygen_C", "sign_bds_C", "sign_cold_C", "state_bytes",
+    "verify_avg_C", "verify_worst_C",
     "ref_size", "hsf", "num_sigs",
     "sz_q1", "sz_max", "sign_q1_C", "verify_max_avg_C", "verify_max_worst_C",
 ]
@@ -416,7 +433,8 @@ def _xmss_csv_row(r):
             r['ots_type'], r['w'], r['swn'], r['l'],
             r['size'],
             _fmt_f(r['keygen_C']), _fmt_f(r['sign_C']),
-            _fmt_f(r['sign_cold_C']), _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
+            _fmt_f(r['sign_cold_C']), r['state_bytes'],
+            _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
             "", "", "", "", "", "", "", ""]
 
 
@@ -425,7 +443,8 @@ def _xmssmt_csv_row(r):
             r['ots_type'], r['w'], r['swn'], r['l'],
             r['size'],
             _fmt_f(r['keygen_C']), _fmt_f(r['sign_C']),
-            _fmt_f(r['sign_cold_C']), _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
+            _fmt_f(r['sign_cold_C']), r['state_bytes'],
+            _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
             "", "", "", "", "", "", "", ""]
 
 
@@ -433,7 +452,7 @@ def _uxmss_csv_row(r):
     return [r['scheme'], r['q_s_log2'], "", "", "",
             r['ots_type'], r['w'], r['swn'], r['l'],
             "",
-            _fmt_f(r['keygen_C']), "", _fmt_f(r['sign_cold_C']), "", "",
+            _fmt_f(r['keygen_C']), "", _fmt_f(r['sign_cold_C']), r['state_bytes'], "", "",
             r['ref_size'], r['hsf'], r['nsig'],
             r['sz_q1'], r['sz_max'],
             _fmt_f(r['sign_q1_C']), _fmt_f(r['verify_max_avg_C']), _fmt_f(r['verify_max_worst_C'])]

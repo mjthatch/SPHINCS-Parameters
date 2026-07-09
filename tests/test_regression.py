@@ -275,7 +275,7 @@ def test_data_json_stateful():
             d['slh']['sv_worst'], d['slh']['qs_log2']) == \
            (b['size'], b['kg'], b['sg'], b['sv'], b['sv_worst'], 64)
     xi = {f: i for i, f in enumerate(d['xmssmt']['fields'])}
-    XKEYS = ('size', 'kg', 'sg', 'sg_cold', 'sv', 'sv_worst')
+    XKEYS = ('size', 'kg', 'sg', 'sg_cold', 'state', 'sv', 'sv_worst')
     for r in d['xmssmt']['rows']:
         m = M.xmssmt_metrics(r[xi['ots']], r[xi['h']], r[xi['d']], r[xi['w']])
         got = tuple(r[xi[k]] for k in XKEYS)
@@ -284,7 +284,8 @@ def test_data_json_stateful():
         assert m['sg_cold'] >= m['sg']
     ui = {f: i for i, f in enumerate(d['uxmss']['fields'])}
     assert len(d['uxmss']['rows']) == 6
-    UKEYS = ('hsf', 'sz_q1', 'sz_max', 'kg', 'sg', 'sg_cold', 'sv_max', 'sv_max_worst')
+    UKEYS = ('hsf', 'sz_q1', 'sz_max', 'kg', 'sg', 'sg_cold', 'state',
+             'sv_max', 'sv_max_worst')
     for r in d['uxmss']['rows']:
         m = M.uxmss_metrics(r[ui['ots']], r[ui['w']])
         got = tuple(r[ui[k]] for k in UKEYS)
