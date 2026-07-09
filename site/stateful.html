@@ -348,6 +348,7 @@
     <p class="hint">
       Pre-swept over h = [10, 40], d = [1, 10] (with d ⏐ h), OTS = {WOTS, WOTS+C}, w = {16, 32, 256},
       plus the 6 UXMSS variants (2 OTS * 3 w). Every candidate has signature size strictly smaller than SLH-DSA-128s.
+      UXMSS tree height is capped at hsf = 255.
       Tighten the bounds to narrow the pool; click a row's <strong>+</strong> to add it to the comparison above.
     </p>
 
@@ -509,6 +510,7 @@ function xmssMtVerifyC(h, d, w, swn, ots, worstCase) {
 }
 
 //  UXMSS (left-leaning)
+const HSF_MAX = 255; 
 function uxmssIdxBytes(hsf) {
   if (hsf <= 0) return 1;
   return Math.max(1, Math.ceil(Math.log2(hsf + 1) / 8));
@@ -520,7 +522,7 @@ function findMaxHsf(w, ots, targetSize) {
   for (let i = 0; i < 64; i++) {
     const idx = uxmssIdxBytes(hsf);
     const avail = targetSize - 1 - R_SIZE - ctr - l * N - idx;
-    const newHsf = Math.max(0, Math.floor(avail / N));
+    const newHsf = Math.max(0, Math.min(Math.floor(avail / N), HSF_MAX));
     if (newHsf === hsf) return hsf;
     hsf = newHsf;
   }

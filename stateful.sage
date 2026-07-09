@@ -22,6 +22,7 @@ signature-count targets: 2^20 and 2^40.
    - The signature with index i \in (1...hsf+1) carries min(i, hsf) auth nodes.
    - Signature size grows linearly with the index (XMSS-MT: constant).
    - Target is strictly isolated to 2^40 signatures, hardcoded to use (5,712 bytes) as the reference bound.
+   - hsf is additionally capped at 255.
 
 OTS variants:
   WOTS-classic  Original Winternitz OTS; no tweaks; l = l1 + l2 chains.
@@ -320,8 +321,11 @@ def _uxmss_idx_bytes(hsf):
     return max(1, int(ceil(log(hsf + 1, 2) / 8)))
 
 
+HSF_MAX = 255   # FXMSS encodes the node height as a single byte
+
 def find_max_hsf(w, ots_type, target_size):
-    """Return the largest hsf such that uxmss_size(*, hsf, ...) is strictly < target_size.
+    """Largest hsf with the max UXMSS signature strictly < target_size,
+    capped at HSF_MAX = 255.
 
     Because idx_bytes depends on hsf, we use a small fixed-point loop.
     """
@@ -332,7 +336,7 @@ def find_max_hsf(w, ots_type, target_size):
     for _ in range(64):
         idx = _uxmss_idx_bytes(hsf)
         avail = target_size - 1 - R_SIZE - ctr - l * N - idx
-        new_hsf = max(0, int(avail // N))
+        new_hsf = max(0, min(int(avail // N), HSF_MAX))
         if new_hsf == hsf:
             return hsf
         hsf = new_hsf

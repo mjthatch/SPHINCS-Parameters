@@ -23,6 +23,8 @@ C_TH1 = 1; C_TH1C = 1; C_TH2 = 2; C_HMSG = 2; C_PRFMSG = 2; C_PRF = 1
 
 SWN = {16: 240, 32: 403, 256: 2040}   # WOTS+C target chain sums S_{w,n}
 
+HSF_MAX = 255                # FXMSS encodes the node height as a single byte
+
 
 def compute_th(x):
     """Compressions for a tweakable hash over x hash-sized values (SHA-256)."""
@@ -275,7 +277,7 @@ def uxmss_find_hsf(w, ots, target_size):
     hsf = 0
     for _ in range(64):
         avail = target_size - 1 - R_SIZE - ctr - l * N - uxmss_idx_bytes(hsf)
-        new = max(0, avail // N)
+        new = max(0, min(avail // N, HSF_MAX))
         if new == hsf:
             return hsf
         hsf = new

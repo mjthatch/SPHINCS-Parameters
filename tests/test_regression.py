@@ -289,6 +289,7 @@ def test_data_json_stateful():
         want = (m['hsf'], m['sz_q1'], m['sz_max'], m['kg'], m['sg'],
                 m['sv_max'], m['sv_max_worst'])
         assert got == want, (r[:2], got, want)
+        assert m['hsf'] <= M.HSF_MAX 
 
 
 def test_site_data_integration():
