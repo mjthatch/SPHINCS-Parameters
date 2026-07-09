@@ -19,7 +19,20 @@ N = 16                       # hashbytes (128-bit security level)
 C_SIZE = 4                   # WOTS+C grinding counter (bytes)
 R_SIZE = 16                  # message randomness = n bytes
 
-C_TH1 = 1; C_TH1C = 1; C_TH2 = 2; C_HMSG = 2; C_PRFMSG = 2; C_PRF = 1
+# Hash-cost convention, mirroring costs.sage
+CONVENTION = os.environ.get('HASH_CONVENTION', 'cached').lower()
+
+C_TH1 = 1; C_TH1C = 1; C_HMSG = 2; C_PRFMSG = 2; C_PRF = 1
+C_TH2 = 1 if CONVENTION == 'cached' else 2
+
+
+def set_convention(mode):
+    """Switch the active convention at runtime (used by the tests)."""
+    global CONVENTION, C_TH2
+    assert mode in ('cached', 'uncached'), mode
+    CONVENTION = mode
+    C_TH2 = 1 if mode == 'cached' else 2
+
 
 SWN = {16: 240, 32: 403, 256: 2040}   # WOTS+C target chain sums S_{w,n}
 
@@ -28,6 +41,8 @@ HSF_MAX = 255                # FXMSS encodes the node height as a single byte
 
 def compute_th(x):
     """Compressions for a tweakable hash over x hash-sized values (SHA-256)."""
+    if CONVENTION == 'cached':
+        return ceil((22 * 8 + 128 * x + 65) / 512)
     return ceil((128 + 96 + 128 * x + 65) / 512)
 
 

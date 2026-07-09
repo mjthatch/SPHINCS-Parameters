@@ -39,23 +39,38 @@ hashbytes = 16  # 16 bytes = 128 bits
 counter_size = 4 # 4 bytes = 32 bits
 randomness_size = 16  # 16 bytes = 128 bits
 
-# Compression function calls per hash operation
-# SHA-256 block size = 512 bits, with 65 bits for padding/length
-# Each value = number of compression calls for that operation
+# -----------------------------------------------------------------------------
+# Hash-cost convention
+# -----------------------------------------------------------------------------
+# Two SHA-256 compression-counting conventions are supported, selected via the
+# HASH_CONVENTION environment variable ('cached' or 'uncached'):
+#
+#   cached (default): FIPS 205 SHA-2 layout with the PK.seed midstate cached
+#
+#   uncached: the original convention of this script: every call pays for its full input (2 compressions)
+#
+#     Usage: HASH_CONVENTION=uncached sage costs.sage --params ...
+#
+HASH_CONVENTION = os.environ.get('HASH_CONVENTION', 'cached').lower()
+assert HASH_CONVENTION \in ('cached', 'uncached'), \
+    "HASH_CONVENTION must be 'cached' or 'uncached', got %r" % HASH_CONVENTION
+
 C_Th1 = 1     # Tweakable hash, 1-block: PKseed (128) + Tweak (96) + m1 (128)
 C_Th1c = 1    # Tweakable hash, 1-block + counter: PKseed + Tweak + m1 + counter (32)
-C_Th2 = 2     # Tweakable hash, 2-block: PKseed + Tweak + m1 + m2
+C_Th2 = 1 if HASH_CONVENTION == 'cached' else 2 # Tweakable hash with hash convention
 C_Hmsg = 2    # Message hash: PKseed + PKroot (128) + R (256) + m (256)
 C_PRFmsg = 2  # Message PRF: SKprf (128) + Opt + m (256) + counter
 C_PRF = 1     # PRF: PKseed + SKseed + Tweak
 
 def compute_Th(n):
     """
-    Compute compression calls for tweakable hash of n values.
+    Compression calls for a tweakable hash over n hash-sized values, under the active HASH_CONVENTION
 
-    Input: PKseed (128) + Tweak (96) + n*hashbytes (n*128) + padding (65)
-    SHA-256 block size: 512 bits
+    cached:   ceil((22*8 + 128*n + 65) / 512)
+    uncached: ceil((128 + 96 + 128*n + 65) / 512)
     """
+    if HASH_CONVENTION == 'cached':
+        return ceil((22*8 + 128*n + 65)/512)
     return ceil((128 + 96 + 128*n + 65)/512)
 
 # =============================================================================

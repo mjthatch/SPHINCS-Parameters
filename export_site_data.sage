@@ -208,7 +208,7 @@ def _commit():
 
 data = {
     'meta': {
-        'version': 2,
+        'version': 3,
         'generator': 'export_site_data.sage',
         'generated': datetime.date.today().isoformat(),
         'commit': _commit(),
@@ -217,6 +217,7 @@ data = {
         'schemes': [s for s in ALL_SCHEMES if s in pools],
         'uxmss_ref_size': UXMSS_REF,
         'hsf_max': int(HSF_MAX),
+        'cost_convention': HASH_CONVENTION,
     },
     'baseline': baseline,
     'pools': pools,

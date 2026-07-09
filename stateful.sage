@@ -42,9 +42,11 @@ w values: 16, 32, 256.
   division is exact; for w=32 we need 26 chains (not 25) to cover the
   full 128-bit message digest.
 
-SHA-256 compression model (same convention as costs.sage):
-  C_Th1=1  C_Th2=2  C_PRF=1  C_Th1c=1  C_Hmsg=2  C_PRFmsg=2
-  Thl_tw(l) = ceil((289+128*l)/512)   Thl_classic(l) = ceil((65+128*l)/512)
+SHA-256 compression model: inherited from costs.sage, governed by the
+HASH_CONVENTION env var ('cached' default: PK.seed midstate cached, C_Th2=1,
+Thl_tw(l) = ceil((241+128*l)/512); 'uncached' original: C_Th2=2,
+Thl_tw(l) = ceil((289+128*l)/512)). Always: C_Th1=1 C_Th1c=1 C_PRF=1
+C_Hmsg=2 C_PRFmsg=2; Thl_classic(l) = ceil((65+128*l)/512) (plain SHA-256).
 
 Usage:
   sage stateful.sage                     # Tables for both 2^20 and 2^40

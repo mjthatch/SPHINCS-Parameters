@@ -595,7 +595,7 @@
       <h2 class="section-title">Filter coefficients</h2>
       <p class="hint">Bound each metric as a coefficient of SLH-DSA-128s. Survivors must satisfy every bound.</p>
       <div id="filter-controls"></div>
-      <label class="mode-toggle" title="Filter and rank on worst-case SigVer and ρ, compared against the baseline's worst case (SLH-DSA-128s: 4,123 C instead of 2,387 C). WOTS+C verification is deterministic, so those candidates keep the same values but gain headroom against the worst-case baseline.">
+      <label class="mode-toggle" title="Filter and rank on worst-case SigVer and ρ, compared against the baseline's worst case (SLH-DSA-128s: 3,891 C instead of 2,155 C). WOTS+C verification is deterministic, so those candidates keep the same values but gain headroom against the worst-case baseline.">
         <input type="checkbox" id="worst-toggle"> use worst-case SigVer &amp; ρ
       </label>
 
@@ -613,7 +613,8 @@
       <div class="panel">
         <div id="initial-info" class="info-strip"></div>
         <h2>Filtering funnel</h2>
-        <p class="hint">Each filter is applied in sequence. Bars show how many candidates survive each step.</p>
+        <p class="hint">Each filter is applied in sequence. Bars show how many candidates survive each step.
+          All costs are SHA-256 compression calls with the PK.seed block midstate-cached (FIPS 205 SHA-2 layout).</p>
         <div id="funnel"></div>
       </div>
 
@@ -697,12 +698,14 @@
       return len1 * (w - 1) + len2 * (w - 1) - ds;
     }
 
-    // Exact compression-call count for a tweakable hash over n hash-sized values.
-    // Input layout (bits): PKseed(128) + Tweak(96) + n*hashbytes(128n) + padding(65)
-    // SHA-256 block size = 512 bits.
-    // Matches costs.sage: compute_Th(n) = ceil((128 + 96 + 128*n + 65) / 512)
+    // Marginal compression-call count for a tweakable hash over n hash-sized
+    // values, under the cached convention (FIPS 205 SHA-2 layout): the
+    // PK.seed block is precomputed once per keypair, so each call costs only
+    // ADRS_c (22 B = 176 bits) + payload (128n bits) + padding (65 bits).
+    // Matches costs.sage (HASH_CONVENTION=cached, the default):
+    //   compute_Th(n) = ceil((176 + 128*n + 65) / 512)
     function computeTh(n) {
-      return Math.ceil((128 + 96 + 128 * n + 65) / 512);
+      return Math.ceil((176 + 128 * n + 65) / 512);
     }
 
     function metrics(p) {
@@ -710,10 +713,13 @@
       const hp = p.h / p.d;
       const { len } = wotsComponents(n, p.w);
 
-      // Compression function costs (Matching the math from costs.sage)
+      // Compression costs: cached convention, matching costs.sage defaults:
+      // PK.seed midstate cached per keypair; a 2-child node hash is
+      // ADRS_c (22 B) + 32 B + padding = 497 bits -> 1 compression.
+      // Hmsg/PRFmsg are message-prefixed (not cacheable) and stay at 2.
       const C_PRF = 1;  // PRF generation
-      const C_Th1 = 1;  // 1-block tweakable hash (Leaves / WOTS chains)
-      const C_Th2 = 2;  // 2-block tweakable hash (Internal tree nodes)
+      const C_Th1 = 1;  // tweakable hash, 1 value (WOTS chain step / leaf)
+      const C_Th2 = 1;  // tweakable hash, 2 values (internal tree node)
       const C_Hmsg = 2; // Message hash
       const C_PRFmsg = 2; // Message PRF
 

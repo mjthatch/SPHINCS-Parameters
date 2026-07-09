@@ -56,8 +56,8 @@ def test_baseline_metrics():
     m = M.spx_metrics(63, 7, 14, 12, 16)
     for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
         assert m[k] == b[k], (k, m[k], b[k])
-    assert abs(m['cpb'] - 0.3038441955193482) < 1e-12
-    assert abs(m['cpb_worst'] - 0.5248217922606925) < 1e-12
+    assert abs(m['cpb'] - 0.2743126272912423) < 1e-12
+    assert abs(m['cpb_worst'] - 0.4952902240325865) < 1e-12
 
 
 def test_stateless_fixtures():
@@ -201,7 +201,8 @@ def test_data_json_meta():
     d = _site_data()
     for key in ('version', 'generator', 'generated', 'commit', 'grid', 'schemes'):
         assert key in d['meta'], key
-    assert d['meta']['version'] == 2
+    assert d['meta']['version'] == 3
+    assert d['meta']['cost_convention'].startswith('cached')
     assert d['meta']['grid']['h'] == [40, 50]
     assert d['meta']['grid']['k'] == [6, 24]
     assert 'SPX' in d['meta']['schemes']
@@ -233,6 +234,26 @@ def test_data_json_stateless():
         assert got == want, (t, got, want)
         assert r[idx['swn']] == 0 and r[idx['mmax']] == 0
     assert json_tuples == csv_tuples
+
+
+def test_uncached_convention():
+    """The original Th2=2 convention stays available (HASH_CONVENTION=uncached)
+    and still reproduces values frozen from real prior sage runs."""
+    spot = FIX['uncached_spot']
+    M.set_convention('uncached')
+    try:
+        b = M.spx_metrics(63, 7, 14, 12, 16)
+        for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
+            assert b[k] == spot['baseline'][k], (k, b[k])
+        v = M.scheme_metrics('W+C', 44, 4, 8, 16, 16, 240)
+        ref = spot['variant|W+C|44,4,8,16,16,240']
+        for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
+            assert v[k] == ref[k], (k, v[k])
+        u = M.uxmss_metrics('TW', 16)
+        for k, val in spot['uxmss|TW,16'].items():
+            assert u[k] == val, (k, u[k], val)
+    finally:
+        M.set_convention('cached')
 
 
 def test_variant_fixtures():
@@ -343,15 +364,20 @@ def test_sage_costs():
     if not shutil.which('sage'):
         print('  [skip] sage not available')
         return
-    p = subprocess.run(
-        ['sage', 'costs.sage', '--params', 'SPX', '64', '14', '12', '63', '7', '16', '0'],
-        capture_output=True, text=True, cwd=ROOT, timeout=600)
+    args = ['sage', 'costs.sage', '--params', 'SPX', '64', '14', '12', '63', '7', '16', '0']
+    # Default convention (cached)
+    p = subprocess.run(args, capture_output=True, text=True, cwd=ROOT, timeout=600)
     assert p.returncode == 0, p.stderr[:2000]
-    out = p.stdout
     b = FIX['baseline']
-    assert f"Size:       {b['size']} bytes" in out, out
-    assert 'Security:   128.0 bits' in out, out
-    assert 'C/byte:     0.30  (worst: 0.52)' in out, out
+    assert f"Size:       {b['size']} bytes" in p.stdout, p.stdout
+    assert 'Security:   128.0 bits' in p.stdout, p.stdout
+    assert 'C/byte:     0.27  (worst: 0.50)' in p.stdout, p.stdout
+    # Original convention via the env flag
+    env = dict(os.environ, HASH_CONVENTION='uncached')
+    p2 = subprocess.run(args, capture_output=True, text=True, cwd=ROOT,
+                        timeout=600, env=env)
+    assert p2.returncode == 0, p2.stderr[:2000]
+    assert 'C/byte:     0.30  (worst: 0.52)' in p2.stdout, p2.stdout
 
 
 # ---------------------------------------------------------------------------

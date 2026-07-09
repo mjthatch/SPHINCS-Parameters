@@ -360,7 +360,9 @@
     </form>
 
     <h2 style="margin-top: 20px;">Comparison table</h2>
-    <p class="hint">All cost columns are SHA-256 compression-function calls. Cost ratios under each value compare against SLH-DSA-128s.
+    <p class="hint">All cost columns are SHA-256 compression-function calls with the PK.seed block midstate-cached
+      (FIPS 205 SHA-2 layout; the original uncached convention remains available in the scripts via
+      <code>HASH_CONVENTION=uncached</code>). Cost ratios under each value compare against SLH-DSA-128s.
       UXMSS signatures grow with the signature index: the size column shows the first→largest range, and all
       ratios, filters and verification costs use the worst case (hsf auth nodes, reached by the last two of
       the hsf+1 signatures).
@@ -414,9 +416,12 @@
 const N = 16;                 // hashbytes
 const C_SIZE = 4;             // counter_size (WOTS+C grinding counter)
 const R_SIZE = 16;            // randomness_size = n (matches costs.sage; SLH-DSA R is n bytes)
+// Cached hash convention (matches costs.sage defaults): PK.seed midstate
+// cached per keypair, so a 2-child node hash costs 1 compression
+// (ADRS_c 22 B + 32 B + padding = 497 bits). Hmsg/PRFmsg stay at 2.
 const C_Th1 = 1;
 const C_Th1c = 1;
-const C_Th2 = 2;
+const C_Th2 = 1;
 const C_Hmsg = 2;
 const C_PRFmsg = 2;
 const C_PRF = 1;
@@ -430,7 +435,7 @@ const SLH = { h: 63, d: 7, k: 14, a: 12, w: 16 };
 
 //  Helpers 
 function idxBytes(h) { return Math.max(1, Math.ceil(h / 8)); }
-function computeTh(n) { return Math.ceil((128 + 96 + 128 * n + 65) / 512); }
+function computeTh(n) { return Math.ceil((176 + 128 * n + 65) / 512); }   // cached: ADRS_c 22 B + payload
 
 //  WOTS+ family 
 function wotsL(w, ots) {
@@ -588,8 +593,8 @@ function uxmssVerifyC(q, hsf, w, swn, ots, worstCase) {
 
 //  SLH-DSA (stateless, FORS + WOTS-TW + hyper-tree)
 // Exact compression-call model — same formulas as index.html metrics() and
-// costs.sage. Baseline SLH-DSA-128s: size 7856 B, KeyGen 292,862 C,
-// SigGen 2,279,391 C, SigVer 2,387 C (avg) / 4,123 C (worst-case WOTS-TW).
+// costs.sage (cached convention). Baseline SLH-DSA-128s: size 7856 B,
+// KeyGen 292,351 C, SigGen 2,218,483 C, SigVer 2,155 C (avg) / 3,891 C (worst).
 function slhMetrics(p) {
   const hp = p.h / p.d;
   const l1 = Math.ceil(8 * N / Math.log2(p.w));

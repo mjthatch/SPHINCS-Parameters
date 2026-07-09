@@ -1,5 +1,5 @@
 {
- "_comment": "Golden values frozen 2026-07-05 after the audit; every number was cross-validated against costs.sage/stateful.sage output, the published CSVs, and both site pages.",
+ "_comment": "Golden values under the CACHED hash convention (default: PK.seed midstate cached, Th2=1, ADRS_c=22B \u2014 see costs.sage HASH_CONVENTION). uncached_spot holds frozen values from real prior sage runs under the original uncached convention.",
  "wots_len": {
   "16": 35,
   "32": 28,
@@ -18,10 +18,10 @@
  "baseline": {
   "role": "STANDARD baseline",
   "size": 7856,
-  "kg": 292862,
-  "sg": 2279391,
-  "sv": 2387,
-  "sv_worst": 4123
+  "kg": 292351,
+  "sg": 2218483,
+  "sv": 2155,
+  "sv_worst": 3891
  },
  "csv_rows": {
   "all_size_capped_candidates.csv": 9183,
@@ -31,106 +31,106 @@
   "63,7,14,12,16": {
    "role": "STANDARD baseline",
    "size": 7856,
-   "kg": 292862,
-   "sg": 2279391,
-   "sv": 2387,
-   "sv_worst": 4123
+   "kg": 292351,
+   "sg": 2218483,
+   "sv": 2155,
+   "sv_worst": 3891
   },
   "50,2,6,20,256": {
    "role": "Smallest Signature",
    "size": 3408,
-   "kg": 154887258110,
-   "sg": 309799682039,
-   "sv": 4953,
-   "sv_worst": 9033
+   "kg": 154820149247,
+   "sg": 309659172862,
+   "sv": 4780,
+   "sv_worst": 8860
   },
   "40,10,9,17,32": {
    "role": "Fastest Keygen",
    "size": 7728,
-   "kg": 14494,
-   "sg": 4863521,
-   "sv": 4820,
-   "sv_worst": 8850
+   "kg": 14479,
+   "sg": 3683732,
+   "sv": 4627,
+   "sv_worst": 8657
   },
   "40,8,23,8,32": {
    "role": "Fastest Signing",
    "size": 7552,
-   "kg": 28990,
-   "sg": 255437,
-   "sv": 4016,
-   "sv_worst": 7240
+   "kg": 28959,
+   "sg": 249324,
+   "sv": 3792,
+   "sv_worst": 7016
   },
-  "50,2,7,17,16": {
+  "50,2,6,20,16": {
    "role": "Fastest Verification",
    "size": 3952,
-   "kg": 19193135102,
-   "sg": 38389940213,
-   "sv": 894,
-   "sv_worst": 1390
+   "kg": 19159580671,
+   "sg": 38338035710,
+   "sv": 724,
+   "sv_worst": 1220
   },
-  "50,2,23,15,16": {
+  "40,2,18,20,16": {
    "role": "Best C/Byte",
    "size": 7824,
-   "kg": 19193135102,
-   "sg": 38389284825,
-   "sv": 1366,
-   "sv_worst": 1862
+   "kg": 598736895,
+   "sg": 1254096885,
+   "sv": 969,
+   "sv_worst": 1465
   },
   "45,5,10,13,16": {
    "role": "Report Candidate 1",
    "size": 5776,
-   "kg": 292862,
-   "sg": 1791978,
-   "sv": 1726,
-   "sv_worst": 2966
+   "kg": 292351,
+   "sg": 1707512,
+   "sv": 1550,
+   "sv_worst": 2790
   },
   "45,5,8,16,16": {
    "role": "Report Candidate 2 / UXMSS ref",
    "size": 5712,
-   "kg": 292862,
-   "sg": 3561453,
-   "sv": 1719,
-   "sv_worst": 2959
+   "kg": 292351,
+   "sg": 3034618,
+   "sv": 1546,
+   "sv_worst": 2786
   },
-  "40,5,24,8,16": {
-   "role": "Balanced (X=0.8842)",
-   "size": 6912,
-   "kg": 146430,
-   "sg": 756689,
-   "sv": 1857,
-   "sv_worst": 3097
+  "40,5,19,10,16": {
+   "role": "Balanced (min global X)",
+   "size": 6800,
+   "kg": 146175,
+   "sg": 789234,
+   "sv": 1617,
+   "sv_worst": 2857
   },
   "40,5,19,9,16": {
-   "role": "Weighted case 1 winner",
+   "role": "Case tuple",
    "size": 6496,
-   "kg": 146430,
-   "sg": 771034,
-   "sv": 1809,
-   "sv_worst": 3049
+   "kg": 146175,
+   "sg": 760050,
+   "sv": 1598,
+   "sv_worst": 2838
   },
   "40,5,13,12,16": {
-   "role": "Weighted case 2 winner",
+   "role": "Case tuple 2",
    "size": 6160,
-   "kg": 146430,
-   "sg": 945124,
-   "sv": 1771,
-   "sv_worst": 3011
+   "kg": 146175,
+   "sg": 890614,
+   "sv": 1575,
+   "sv_worst": 2815
   },
   "40,4,9,16,16": {
-   "role": "Normalized winner (S3.5)",
+   "role": "Normalized winner ref",
    "size": 5344,
-   "kg": 585726,
-   "sg": 4702189,
-   "sv": 1470,
-   "sv_worst": 2462
+   "kg": 584703,
+   "sg": 4108282,
+   "sv": 1286,
+   "sv_worst": 2278
   },
   "45,5,12,11,16": {
-   "role": "Regular-weighted winner (S3.5)",
+   "role": "Regular-weighted ref",
    "size": 5840,
-   "kg": 292862,
-   "sg": 1562598,
-   "sv": 1732,
-   "sv_worst": 2972
+   "kg": 292351,
+   "sg": 1535479,
+   "sv": 1555,
+   "sv_worst": 2795
   }
  },
  "stateful": {
@@ -139,114 +139,123 @@
     "hsf": 255,
     "sz_q1": 593,
     "sz_max": 4657,
-    "kg": 146430,
+    "kg": 146175,
     "sg": 301,
-    "sg_cold": 146731,
-    "sv_max": 784,
-    "sv_max_worst": 1032,
+    "sg_cold": 146476,
+    "sv_max": 529,
+    "sv_max_worst": 777,
     "state": 4096
    },
    "TW,32": {
     "hsf": 255,
     "sz_q1": 481,
     "sz_max": 4545,
-    "kg": 231934,
+    "kg": 231679,
     "sg": 466,
-    "sg_cold": 232400,
-    "sv_max": 954,
-    "sv_max_worst": 1357,
+    "sg_cold": 232145,
+    "sv_max": 699,
+    "sv_max_worst": 1102,
     "state": 4096
    },
    "TW,256": {
     "hsf": 255,
     "sz_q1": 321,
     "sz_max": 4385,
-    "kg": 1181694,
+    "kg": 1181183,
     "sg": 2317,
-    "sg_cold": 1184011,
-    "sv_max": 2813,
-    "sv_max_worst": 4853,
+    "sg_cold": 1183500,
+    "sv_max": 2557,
+    "sv_max_worst": 4597,
     "state": 4096
    },
    "WC,16": {
     "hsf": 255,
     "sz_q1": 549,
     "sz_max": 4613,
-    "kg": 133886,
+    "kg": 133631,
     "sg": 351,
-    "sg_cold": 134237,
-    "sv_max": 762,
-    "sv_max_worst": 762,
+    "sg_cold": 133982,
+    "sv_max": 507,
+    "sv_max_worst": 507,
     "state": 4096
    },
    "WC,32": {
     "hsf": 255,
     "sz_q1": 453,
     "sz_max": 4517,
-    "kg": 215550,
-    "sg": 560,
-    "sg_cold": 216110,
-    "sv_max": 924,
-    "sv_max_worst": 924,
+    "kg": 215039,
+    "sg": 559,
+    "sg_cold": 215598,
+    "sv_max": 668,
+    "sv_max_worst": 668,
     "state": 4096
    },
    "WC,256": {
     "hsf": 255,
     "sz_q1": 293,
     "sz_max": 4357,
-    "kg": 1050366,
+    "kg": 1050111,
     "sg": 2814,
-    "sg_cold": 1053180,
-    "sv_max": 2558,
-    "sv_max_worst": 2558,
+    "sg_cold": 1052925,
+    "sv_max": 2303,
+    "sv_max_worst": 2303,
     "state": 4096
    }
   },
   "xmssmt": {
    "TW,20,1,16": {
     "size": 899,
-    "kg": 599785470,
-    "sg": 11741,
-    "sg_cold": 599785771,
-    "sv": 314,
-    "sv_worst": 562,
+    "kg": 598736895,
+    "sg": 11721,
+    "sg_cold": 598737196,
+    "sv": 294,
+    "sv_worst": 542,
     "state": 1120
    },
    "WC,10,1,16": {
     "size": 694,
-    "kg": 535550,
-    "sg": 5581,
-    "sg_cold": 535901,
-    "sv": 272,
-    "sv_worst": 272,
+    "kg": 534527,
+    "sg": 5571,
+    "sg_cold": 534878,
+    "sv": 262,
+    "sv_worst": 262,
     "state": 560
    },
    "TW,20,2,32": {
     "size": 1235,
-    "kg": 927742,
-    "sg": 18586,
-    "sg_cold": 1856412,
-    "sv": 926,
-    "sv_worst": 1732,
+    "kg": 926719,
+    "sg": 18566,
+    "sg_cold": 1854366,
+    "sv": 906,
+    "sv_worst": 1712,
     "state": 1568
    },
    "WC,40,5,256": {
     "size": 1961,
-    "kg": 1050366,
-    "sg": 166934,
-    "sg_cold": 5265884,
-    "sv": 10312,
-    "sv_worst": 10312,
+    "kg": 1050111,
+    "sg": 166894,
+    "sg_cold": 5264609,
+    "sv": 10272,
+    "sv_worst": 10272,
     "state": 3264
    },
    "TW,40,10,16": {
     "size": 6261,
-    "kg": 9150,
-    "sg": 23181,
-    "sg_cold": 94474,
-    "sv": 2802,
-    "sv_worst": 5282,
+    "kg": 9135,
+    "sg": 23141,
+    "sg_cold": 94324,
+    "sv": 2762,
+    "sv_worst": 5242,
     "state": 7280
+   },
+   "TW,30,3,16": {
+    "size": 2180,
+    "kg": 584703,
+    "sg": 17431,
+    "sg_cold": 1755004,
+    "sv": 848,
+    "sv_worst": 1592,
+    "state": 2800
    }
   }
  },
@@ -254,66 +263,66 @@
  "variants": {
   "W+C|44,4,8,16,16,240": {
    "size": 4960,
-   "kg": 1071102,
-   "sg": 6381815,
-   "sv": 1357,
-   "sv_worst": 1357
+   "kg": 1069055,
+   "sg": 5849347,
+   "sv": 1185,
+   "sv_worst": 1185
   },
   "W+C|40,5,11,14,256,2040": {
    "size": 4596,
-   "kg": 1050366,
-   "sg": 5976457,
-   "sv": 10635,
-   "sv_worst": 10635
+   "kg": 1050111,
+   "sg": 5794969,
+   "sv": 10441,
+   "sv_worst": 10441
   },
   "W+C|40,5,11,14,256,2840": {
    "size": 4596,
-   "kg": 1050366,
-   "sg": 6123432,
-   "sv": 6635,
-   "sv_worst": 6635
+   "kg": 1050111,
+   "sg": 5941944,
+   "sv": 6441,
+   "sv_worst": 6441
   },
   "W+C_F+C|44,4,8,16,16,240": {
    "size": 4688,
-   "kg": 1071102,
-   "sg": 6381813,
-   "sv": 1324,
-   "sv_worst": 1324
+   "kg": 1069055,
+   "sg": 5914880,
+   "sv": 1168,
+   "sv_worst": 1168
   },
   "W+C_F+C|40,5,11,14,256,2040": {
    "size": 4356,
-   "kg": 1050366,
-   "sg": 5976455,
-   "sv": 10606,
-   "sv_worst": 10606
+   "kg": 1050111,
+   "sg": 5811349,
+   "sv": 10425,
+   "sv_worst": 10425
   },
   "W+C_F+C|20,2,10,15,256,2040": {
    "size": 3160,
-   "kg": 4201470,
-   "sg": 9715143,
-   "sv": 4416,
-   "sv_worst": 4416
+   "kg": 4200447,
+   "sg": 9418194,
+   "sv": 4261,
+   "sv_worst": 4261
   },
   "W+C_P+FP|44,4,8,16,16,240": {
    "size": 4464,
-   "kg": 1071102,
-   "sg": 6869634,
-   "sv": 1292,
-   "sv_worst": 1292
+   "kg": 1069055,
+   "sg": 6337159,
+   "sv": 1151,
+   "sv_worst": 1151
   },
   "W+C_P+FP|40,5,11,14,256,2040": {
    "size": 4020,
-   "kg": 1050366,
-   "sg": 6419013,
-   "sv": 10559,
-   "sv_worst": 10559
+   "kg": 1050111,
+   "sg": 6237515,
+   "sv": 10401,
+   "sv_worst": 10401
   },
   "W+C_P+FP|24,2,8,16,16,240": {
    "size": 3112,
-   "kg": 2142206,
-   "sg": 6869506,
-   "sv": 752,
-   "sv_worst": 752
+   "kg": 2138111,
+   "sg": 6337029,
+   "sv": 631,
+   "sv_worst": 631
   }
  },
  "variant_pool_counts": {
@@ -321,5 +330,32 @@
   "W+C_F+C": 7077,
   "W+C_P+FP": 7746
  },
- "_comment_variants": "variants: frozen from a real `sage costs.sage` CSV run; variant_pool_counts: frozen from the mpmath-verified 2026-07-05 generation (0 security pass/fail flips on the canonical grid)."
+ "_comment_variants": "variants: frozen from a real `sage costs.sage` CSV run; variant_pool_counts: frozen from the mpmath-verified 2026-07-05 generation (0 security pass/fail flips on the canonical grid).",
+ "uncached_spot": {
+  "baseline": {
+   "size": 7856,
+   "kg": 292862,
+   "sg": 2279391,
+   "sv": 2387,
+   "sv_worst": 4123
+  },
+  "variant|W+C|44,4,8,16,16,240": {
+   "size": 4960,
+   "kg": 1071102,
+   "sg": 6381815,
+   "sv": 1357,
+   "sv_worst": 1357
+  },
+  "uxmss|TW,16": {
+   "hsf": 255,
+   "sz_q1": 593,
+   "sz_max": 4657,
+   "kg": 146430,
+   "sg": 301,
+   "sg_cold": 146731,
+   "state": 4096,
+   "sv_max": 784,
+   "sv_max_worst": 1032
+  }
+ }
 }
