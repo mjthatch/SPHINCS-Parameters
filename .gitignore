@@ -2,9 +2,22 @@
 
 *.sage.py
 
-# Generated sweep outputs
+# Generated artifacts
 utils/outputs_specialized/
 candidates.csv
+utils/all_size_capped_candidates.csv
+utils/all_unbound_candidates.csv
+utils/global_X_thresholds.csv
+utils/master_extremes_summary.csv
+site/data.json
+document/main.pdf
+document/content/images/sieve_step*.png
+document/content/images/concentric_diagram.png
+document/content/images/scatter_plot.png
+document/content/images/comparison_regular.png
+document/content/images/comparison_normalized.png
+document/content/images/ideal_candidate_balanced.png
+document/content/images/ideal_candidate_best.png
 
 # Compiled report — built and deployed by CI (.github/workflows/build_and_deploy.yml)
 site/report.pdf
