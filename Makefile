@@ -43,6 +43,24 @@ figures:
 	mv $(UTILS)/euler_custom_minimax.png $(IMAGES)/concentric_diagram.png
 	cd $(IMAGES) && $(PYTHON) ../../../$(UTILS)/plot_concept_scatter.py
 	mv $(IMAGES)/conceptual_bounded_zones_origin_vector.png $(IMAGES)/scatter_plot.png
+	# Report Sec. "Metric-Normalized Weighted Distance": method comparison
+	cd $(IMAGES) && $(PYTHON) ../../../$(UTILS)/sieve_search_draw.py \
+	    --input ../../../$(CSV_UNBOUND) --figure focus --distance regular \
+	    --x-size 0.75 --x-kg 5 --x-sg 5 --x-sv 1.5 --x-cb 1 \
+	    --weights 5,1.5,1.5,2,1 --out comparison_regular.png
+	cd $(IMAGES) && $(PYTHON) ../../../$(UTILS)/sieve_search_draw.py \
+	    --input ../../../$(CSV_UNBOUND) --figure focus --distance normalized \
+	    --x-size 0.75 --x-kg 5 --x-sg 5 --x-sv 1.5 --x-cb 1 \
+	    --weights 5,1.5,1.5,2,1 --out comparison_normalized.png
+	# Report Sec. "Recommended Candidate Tuple": the two surviving candidates
+	cd $(IMAGES) && $(PYTHON) ../../../$(UTILS)/sieve_search_draw.py \
+	    --input ../../../$(CSV_UNBOUND) --figure focus --distance regular --annotate \
+	    --x-size 0.74 --x-kg 2 --x-sg 2 --x-sv 0.8 --x-cb 1 \
+	    --weights 5,1,1,2,1 --out ideal_candidate_balanced.png
+	cd $(IMAGES) && $(PYTHON) ../../../$(UTILS)/sieve_search_draw.py \
+	    --input ../../../$(CSV_UNBOUND) --figure focus --distance normalized --annotate \
+	    --x-size 0.74 --x-kg 2 --x-sg 2 --x-sv 0.8 --x-cb 1 \
+	    --weights 5,1,1,2,1 --out ideal_candidate_best.png
 
 test:
 	$(PYTHON) tests/test_regression.py
@@ -52,3 +70,5 @@ clean-generated:
 	rm -f $(UTILS)/global_X_thresholds.csv $(UTILS)/master_extremes_summary.csv
 	rm -f site/data.json site/report.pdf
 	rm -f $(IMAGES)/sieve_step*.png $(IMAGES)/concentric_diagram.png $(IMAGES)/scatter_plot.png
+	rm -f $(IMAGES)/comparison_regular.png $(IMAGES)/comparison_normalized.png
+	rm -f $(IMAGES)/ideal_candidate_balanced.png $(IMAGES)/ideal_candidate_best.png
