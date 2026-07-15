@@ -272,6 +272,17 @@ def test_data_json_stateless():
     assert json_tuples == csv_tuples
 
 
+def test_sage_preparser_hazards():
+    """No backslash line-continuations in .sage files"""
+    import glob
+    offenders = []
+    for path in glob.glob(os.path.join(ROOT, '*.sage')):
+        for lineno, line in enumerate(open(path), 1):
+            if line.rstrip('\n').endswith('\\'):
+                offenders.append(f'{os.path.basename(path)}:{lineno}')
+    assert not offenders, f'backslash continuations in sage files: {offenders}'
+
+
 def test_uncached_convention():
     """The original Th2=2 convention stays available (HASH_CONVENTION=uncached)
     and still reproduces values frozen from real prior sage runs."""

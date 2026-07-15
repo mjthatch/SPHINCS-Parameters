@@ -140,8 +140,9 @@ def sweep_scheme(scheme):
 pools = {}
 if 'SPX' in schemes:
     pairs = _hd_pairs()
-    spx_considered = len(pairs) * len(GRID['w']) \
-        * (GRID['k'][1] - GRID['k'][0] + 1) * (GRID['a'][1] - GRID['a'][0] + 1)
+    spx_considered = (len(pairs) * len(GRID['w'])
+                      * (GRID['k'][1] - GRID['k'][0] + 1)
+                      * (GRID['a'][1] - GRID['a'][0] + 1))
     pools['SPX'] = {'fields': POOL_FIELDS, 'considered': spx_considered,
                     'count': len(spx_rows), 'rows': spx_rows}
     print("SPX: {} rows (from CSV)".format(len(spx_rows)), file=sys.stderr)

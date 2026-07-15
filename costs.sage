@@ -52,8 +52,8 @@ randomness_size = 16  # 16 bytes = 128 bits
 #     Usage: HASH_CONVENTION=uncached sage costs.sage --params ...
 #
 HASH_CONVENTION = os.environ.get('HASH_CONVENTION', 'cached').lower()
-assert HASH_CONVENTION \in ('cached', 'uncached'), \
-    "HASH_CONVENTION must be 'cached' or 'uncached', got %r" % HASH_CONVENTION
+assert HASH_CONVENTION in ('cached', 'uncached'), (
+    "HASH_CONVENTION must be 'cached' or 'uncached', got %r" % HASH_CONVENTION)
 
 C_Th1 = 1     # Tweakable hash, 1-block: PKseed (128) + Tweak (96) + m1 (128)
 C_Th1c = 1    # Tweakable hash, 1-block + counter: PKseed + Tweak + m1 + counter (32)
