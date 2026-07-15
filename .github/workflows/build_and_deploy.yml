@@ -56,7 +56,8 @@ jobs:
       - name: Generate (sweeps, derived tables, data.json, figures)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          sage -pip install --quiet pandas seaborn
+          apt-get update -qq && apt-get install -y -qq make
+          sage -pip install --quiet --no-cache-dir pandas seaborn
           make sweeps derived data figures PYTHON="sage -python"
 
       - name: Upload generated artifacts
