@@ -12,6 +12,12 @@ Run:  python3 tests/test_regression.py        (also works under pytest)
 Requires node for the site tests and sage for the sage test; both are
 skipped with a notice when unavailable.
 
+Generated artifacts (the sweep CSVs and site/data.json) are produced by
+`make generate` and are not tracked in git. Tests that validate them skip
+with a notice when the files are absent - set GENERATED_REQUIRED=1 (as the
+CI pipeline does after its generate stage) to turn those skips into
+failures.
+
 These tests would have caught both critical audit findings:
   C1 (w=32 chain-count floor bug)  -> test_wots_chain_counts, test_csv_*
   C2 (randomness-size divergence)  -> test_stateful_model, test_site_stateful
@@ -31,6 +37,26 @@ sys.path.insert(0, HERE)
 import model as M  # noqa: E402
 
 FIX = json.load(open(os.path.join(HERE, 'fixtures.json')))
+
+GENERATED_REQUIRED = bool(os.environ.get('GENERATED_REQUIRED'))
+
+
+def _missing(*relpaths):
+    """True if any generated artifact is absent.
+
+    Under GENERATED_REQUIRED=1 (CI pipeline mode) absence is a failure
+    instead of a skip.
+    """
+    absent = [p for p in relpaths if not os.path.exists(os.path.join(ROOT, p))]
+    if not absent:
+        return False
+    assert not GENERATED_REQUIRED, f'generated artifacts missing: {absent}'
+    print(f"  [skip] generated artifacts not present (run `make generate`): {', '.join(absent)}")
+    return True
+
+
+CSVS = ('utils/all_size_capped_candidates.csv', 'utils/all_unbound_candidates.csv')
+DATA_JSON = 'site/data.json'
 
 
 def _tuple_of(key):
@@ -89,12 +115,16 @@ def _csv_rows(name):
 
 
 def test_csv_row_counts():
+    if _missing(*CSVS):
+        return
     for name, expected in FIX['csv_rows'].items():
         assert len(_csv_rows(name)) == expected, name
 
 
 def test_csv_full_consistency():
     """Every row of both sweep CSVs must match the reference model exactly."""
+    if _missing(*CSVS):
+        return
     for name in FIX['csv_rows']:
         for r in _csv_rows(name):
             t = tuple(int(r[x]) for x in 'hdkaw')
@@ -110,6 +140,8 @@ def test_csv_full_consistency():
 
 
 def test_csv_standard_row():
+    if _missing(CSVS[0]):
+        return
     std = [r for r in _csv_rows('all_size_capped_candidates.csv')
            if r['label'] == 'STANDARD']
     assert len(std) == 1
@@ -198,6 +230,8 @@ def _site_data():
 
 
 def test_data_json_meta():
+    if _missing(DATA_JSON):
+        return
     d = _site_data()
     for key in ('version', 'generator', 'generated', 'commit', 'grid', 'schemes'):
         assert key in d['meta'], key
@@ -213,6 +247,8 @@ def test_data_json_meta():
 
 
 def test_data_json_stateless():
+    if _missing(DATA_JSON, CSVS[0]):
+        return
     d = _site_data()
     b = FIX['baseline']
     for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
@@ -267,6 +303,8 @@ def test_variant_fixtures():
 
 
 def test_data_json_variant_pools():
+    if _missing(DATA_JSON):
+        return
     d = _site_data()
     grid = d['meta']['grid']
     for scheme in ('W+C', 'W+C_F+C', 'W+C_P+FP'):
@@ -290,6 +328,8 @@ def test_data_json_variant_pools():
 
 
 def test_data_json_stateful():
+    if _missing(DATA_JSON):
+        return
     d = _site_data()['stateful']
     b = FIX['baseline']
     assert (d['slh']['size'], d['slh']['kg'], d['slh']['sg'], d['slh']['sv'],
@@ -317,6 +357,8 @@ def test_data_json_stateful():
 
 def test_site_data_integration():
     """Run both pages' data-loading paths under node against site/data.json."""
+    if _missing(DATA_JSON):
+        return
     data_path = os.path.join(ROOT, 'site', 'data.json')
     # index.html: poolFromData must reproduce the pool; STD_M must equal baseline
     js = _extract_js('index.html', '// ---------- State ----------')
