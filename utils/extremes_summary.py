@@ -34,7 +34,7 @@ def main():
 
     rows = [std.to_dict() | {'cat1_award': ''}]
     for col, award in EXTREMES:
-        winner = custom.sort_values(col).iloc[0]
+        winner = custom.sort_values([col, 'size', 'h', 'd', 'k', 'a', 'w']).iloc[0]
         rows.append(winner.to_dict() | {'cat1_award': award})
         print(f'  {award}: ({winner.h:.0f},{winner.d:.0f},{winner.k:.0f},'
               f'{winner.a:.0f},{winner.w:.0f})  {col} = {winner[col]}')

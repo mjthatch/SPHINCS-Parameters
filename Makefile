@@ -35,6 +35,7 @@ data:
 	$(SAGE) export_site_data.sage
 
 figures:
+	mkdir -p $(IMAGES)   # holds only generated files, so fresh checkouts lack it
 	cd $(IMAGES) && $(PYTHON) ../../../$(UTILS)/sieve_search_draw.py \
 	    --input ../../../$(CSV_UNBOUND) --weights 1,1,1,1,1 --suffix _1
 	cd $(IMAGES) && $(PYTHON) ../../../$(UTILS)/sieve_search_draw.py \
