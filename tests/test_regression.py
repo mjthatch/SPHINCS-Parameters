@@ -12,6 +12,12 @@ Run:  python3 tests/test_regression.py        (also works under pytest)
 Requires node for the site tests and sage for the sage test; both are
 skipped with a notice when unavailable.
 
+Generated artifacts (the sweep CSVs and site/data.json) are produced by
+`make generate` and are not tracked in git. Tests that validate them skip
+with a notice when the files are absent - set GENERATED_REQUIRED=1 (as the
+CI pipeline does after its generate stage) to turn those skips into
+failures.
+
 These tests would have caught both critical audit findings:
   C1 (w=32 chain-count floor bug)  -> test_wots_chain_counts, test_csv_*
   C2 (randomness-size divergence)  -> test_stateful_model, test_site_stateful
@@ -31,6 +37,26 @@ sys.path.insert(0, HERE)
 import model as M  # noqa: E402
 
 FIX = json.load(open(os.path.join(HERE, 'fixtures.json')))
+
+GENERATED_REQUIRED = bool(os.environ.get('GENERATED_REQUIRED'))
+
+
+def _missing(*relpaths):
+    """True if any generated artifact is absent.
+
+    Under GENERATED_REQUIRED=1 (CI pipeline mode) absence is a failure
+    instead of a skip.
+    """
+    absent = [p for p in relpaths if not os.path.exists(os.path.join(ROOT, p))]
+    if not absent:
+        return False
+    assert not GENERATED_REQUIRED, f'generated artifacts missing: {absent}'
+    print(f"  [skip] generated artifacts not present (run `make generate`): {', '.join(absent)}")
+    return True
+
+
+CSVS = ('utils/all_size_capped_candidates.csv', 'utils/all_unbound_candidates.csv')
+DATA_JSON = 'site/data.json'
 
 
 def _tuple_of(key):
@@ -56,8 +82,8 @@ def test_baseline_metrics():
     m = M.spx_metrics(63, 7, 14, 12, 16)
     for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
         assert m[k] == b[k], (k, m[k], b[k])
-    assert abs(m['cpb'] - 0.3038441955193482) < 1e-12
-    assert abs(m['cpb_worst'] - 0.5248217922606925) < 1e-12
+    assert abs(m['cpb'] - 0.2743126272912423) < 1e-12
+    assert abs(m['cpb_worst'] - 0.4952902240325865) < 1e-12
 
 
 def test_stateless_fixtures():
@@ -89,12 +115,16 @@ def _csv_rows(name):
 
 
 def test_csv_row_counts():
+    if _missing(*CSVS):
+        return
     for name, expected in FIX['csv_rows'].items():
         assert len(_csv_rows(name)) == expected, name
 
 
 def test_csv_full_consistency():
     """Every row of both sweep CSVs must match the reference model exactly."""
+    if _missing(*CSVS):
+        return
     for name in FIX['csv_rows']:
         for r in _csv_rows(name):
             t = tuple(int(r[x]) for x in 'hdkaw')
@@ -110,6 +140,8 @@ def test_csv_full_consistency():
 
 
 def test_csv_standard_row():
+    if _missing(CSVS[0]):
+        return
     std = [r for r in _csv_rows('all_size_capped_candidates.csv')
            if r['label'] == 'STANDARD']
     assert len(std) == 1
@@ -198,10 +230,13 @@ def _site_data():
 
 
 def test_data_json_meta():
+    if _missing(DATA_JSON):
+        return
     d = _site_data()
     for key in ('version', 'generator', 'generated', 'commit', 'grid', 'schemes'):
         assert key in d['meta'], key
-    assert d['meta']['version'] == 2
+    assert d['meta']['version'] == 3
+    assert d['meta']['cost_convention'].startswith('cached')
     assert d['meta']['grid']['h'] == [40, 50]
     assert d['meta']['grid']['k'] == [6, 24]
     assert 'SPX' in d['meta']['schemes']
@@ -212,6 +247,8 @@ def test_data_json_meta():
 
 
 def test_data_json_stateless():
+    if _missing(DATA_JSON, CSVS[0]):
+        return
     d = _site_data()
     b = FIX['baseline']
     for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
@@ -235,6 +272,37 @@ def test_data_json_stateless():
     assert json_tuples == csv_tuples
 
 
+def test_sage_preparser_hazards():
+    """No backslash line-continuations in .sage files"""
+    import glob
+    offenders = []
+    for path in glob.glob(os.path.join(ROOT, '*.sage')):
+        for lineno, line in enumerate(open(path), 1):
+            if line.rstrip('\n').endswith('\\'):
+                offenders.append(f'{os.path.basename(path)}:{lineno}')
+    assert not offenders, f'backslash continuations in sage files: {offenders}'
+
+
+def test_uncached_convention():
+    """The original Th2=2 convention stays available (HASH_CONVENTION=uncached)
+    and still reproduces values frozen from real prior sage runs."""
+    spot = FIX['uncached_spot']
+    M.set_convention('uncached')
+    try:
+        b = M.spx_metrics(63, 7, 14, 12, 16)
+        for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
+            assert b[k] == spot['baseline'][k], (k, b[k])
+        v = M.scheme_metrics('W+C', 44, 4, 8, 16, 16, 240)
+        ref = spot['variant|W+C|44,4,8,16,16,240']
+        for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'):
+            assert v[k] == ref[k], (k, v[k])
+        u = M.uxmss_metrics('TW', 16)
+        for k, val in spot['uxmss|TW,16'].items():
+            assert u[k] == val, (k, u[k], val)
+    finally:
+        M.set_convention('cached')
+
+
 def test_variant_fixtures():
     """Frozen values from a real `sage costs.sage` run vs the reference model."""
     for key, f in FIX['variants'].items():
@@ -246,6 +314,8 @@ def test_variant_fixtures():
 
 
 def test_data_json_variant_pools():
+    if _missing(DATA_JSON):
+        return
     d = _site_data()
     grid = d['meta']['grid']
     for scheme in ('W+C', 'W+C_F+C', 'W+C_P+FP'):
@@ -269,30 +339,37 @@ def test_data_json_variant_pools():
 
 
 def test_data_json_stateful():
+    if _missing(DATA_JSON):
+        return
     d = _site_data()['stateful']
     b = FIX['baseline']
     assert (d['slh']['size'], d['slh']['kg'], d['slh']['sg'], d['slh']['sv'],
             d['slh']['sv_worst'], d['slh']['qs_log2']) == \
            (b['size'], b['kg'], b['sg'], b['sv'], b['sv_worst'], 64)
     xi = {f: i for i, f in enumerate(d['xmssmt']['fields'])}
+    XKEYS = ('size', 'kg', 'sg', 'sg_cold', 'state', 'sv', 'sv_worst')
     for r in d['xmssmt']['rows']:
         m = M.xmssmt_metrics(r[xi['ots']], r[xi['h']], r[xi['d']], r[xi['w']])
-        got = tuple(r[xi[k]] for k in ('size', 'kg', 'sg', 'sv', 'sv_worst'))
-        want = (m['size'], m['kg'], m['sg'], m['sv'], m['sv_worst'])
+        got = tuple(r[xi[k]] for k in XKEYS)
+        want = tuple(m[k] for k in XKEYS)
         assert got == want, (r[:4], got, want)
+        assert m['sg_cold'] >= m['sg']
     ui = {f: i for i, f in enumerate(d['uxmss']['fields'])}
     assert len(d['uxmss']['rows']) == 6
+    UKEYS = ('hsf', 'sz_q1', 'sz_max', 'kg', 'sg', 'sg_cold', 'state',
+             'sv_max', 'sv_max_worst')
     for r in d['uxmss']['rows']:
         m = M.uxmss_metrics(r[ui['ots']], r[ui['w']])
-        got = tuple(r[ui[k]] for k in
-                    ('hsf', 'sz_q1', 'sz_max', 'kg', 'sg', 'sv_max', 'sv_max_worst'))
-        want = (m['hsf'], m['sz_q1'], m['sz_max'], m['kg'], m['sg'],
-                m['sv_max'], m['sv_max_worst'])
+        got = tuple(r[ui[k]] for k in UKEYS)
+        want = tuple(m[k] for k in UKEYS)
         assert got == want, (r[:2], got, want)
+        assert m['hsf'] <= M.HSF_MAX
 
 
 def test_site_data_integration():
     """Run both pages' data-loading paths under node against site/data.json."""
+    if _missing(DATA_JSON):
+        return
     data_path = os.path.join(ROOT, 'site', 'data.json')
     # index.html: poolFromData must reproduce the pool; STD_M must equal baseline
     js = _extract_js('index.html', '// ---------- State ----------')
@@ -340,15 +417,20 @@ def test_sage_costs():
     if not shutil.which('sage'):
         print('  [skip] sage not available')
         return
-    p = subprocess.run(
-        ['sage', 'costs.sage', '--params', 'SPX', '64', '14', '12', '63', '7', '16', '0'],
-        capture_output=True, text=True, cwd=ROOT, timeout=600)
+    args = ['sage', 'costs.sage', '--params', 'SPX', '64', '14', '12', '63', '7', '16', '0']
+    # Default convention (cached)
+    p = subprocess.run(args, capture_output=True, text=True, cwd=ROOT, timeout=600)
     assert p.returncode == 0, p.stderr[:2000]
-    out = p.stdout
     b = FIX['baseline']
-    assert f"Size:       {b['size']} bytes" in out, out
-    assert 'Security:   128.0 bits' in out, out
-    assert 'C/byte:     0.30  (worst: 0.52)' in out, out
+    assert f"Size:       {b['size']} bytes" in p.stdout, p.stdout
+    assert 'Security:   128.0 bits' in p.stdout, p.stdout
+    assert 'C/byte:     0.27  (worst: 0.50)' in p.stdout, p.stdout
+    # Original convention via the env flag
+    env = dict(os.environ, HASH_CONVENTION='uncached')
+    p2 = subprocess.run(args, capture_output=True, text=True, cwd=ROOT,
+                        timeout=600, env=env)
+    assert p2.returncode == 0, p2.stderr[:2000]
+    assert 'C/byte:     0.30  (worst: 0.52)' in p2.stdout, p2.stdout
 
 
 # ---------------------------------------------------------------------------

@@ -19,13 +19,30 @@ N = 16                       # hashbytes (128-bit security level)
 C_SIZE = 4                   # WOTS+C grinding counter (bytes)
 R_SIZE = 16                  # message randomness = n bytes
 
-C_TH1 = 1; C_TH1C = 1; C_TH2 = 2; C_HMSG = 2; C_PRFMSG = 2; C_PRF = 1
+# Hash-cost convention, mirroring costs.sage
+CONVENTION = os.environ.get('HASH_CONVENTION', 'cached').lower()
+
+C_TH1 = 1; C_TH1C = 1; C_HMSG = 2; C_PRFMSG = 2; C_PRF = 1
+C_TH2 = 1 if CONVENTION == 'cached' else 2
+
+
+def set_convention(mode):
+    """Switch the active convention at runtime (used by the tests)."""
+    global CONVENTION, C_TH2
+    assert mode in ('cached', 'uncached'), mode
+    CONVENTION = mode
+    C_TH2 = 1 if mode == 'cached' else 2
+
 
 SWN = {16: 240, 32: 403, 256: 2040}   # WOTS+C target chain sums S_{w,n}
+
+HSF_MAX = 255                # FXMSS encodes the node height as a single byte
 
 
 def compute_th(x):
     """Compressions for a tweakable hash over x hash-sized values (SHA-256)."""
+    if CONVENTION == 'cached':
+        return ceil((22 * 8 + 128 * x + 65) / 512)
     return ceil((128 + 96 + 128 * x + 65) / 512)
 
 
@@ -258,9 +275,12 @@ def xmssmt_metrics(ots, h, d, w):
     pk = wots_pk_c(w, ots)
     kg = 2**hp * pk + (2**hp - 1) * C_TH2
     sg = C_HMSG + C_PRFMSG + wots_sign_c(w, ots) + d * (hp * pk + hp * C_TH2)
+    sg_cold = C_HMSG + C_PRFMSG + d * (kg + wots_sign_c(w, ots))
     sv = C_HMSG + d * (wots_verify_c(w, ots, False) + hp * C_TH2)
     sv_worst = C_HMSG + d * (wots_verify_c(w, ots, True) + hp * C_TH2)
-    return {'size': size, 'kg': kg, 'sg': sg, 'sv': sv, 'sv_worst': sv_worst}
+    state = d * ceil(3.5 * hp) * N + (d - 1) * l * N
+    return {'size': size, 'kg': kg, 'sg': sg, 'sg_cold': sg_cold,
+            'sv': sv, 'sv_worst': sv_worst, 'state': state}
 
 
 def uxmss_idx_bytes(hsf):
@@ -275,7 +295,7 @@ def uxmss_find_hsf(w, ots, target_size):
     hsf = 0
     for _ in range(64):
         avail = target_size - 1 - R_SIZE - ctr - l * N - uxmss_idx_bytes(hsf)
-        new = max(0, avail // N)
+        new = max(0, min(avail // N, HSF_MAX))
         if new == hsf:
             return hsf
         hsf = new
@@ -290,12 +310,16 @@ def uxmss_metrics(ots, w, target_size=5712):
     def size(q):
         return R_SIZE + ctr + l * N + min(q, hsf) * N + uxmss_idx_bytes(hsf)
 
+    kg = (hsf + 1) * wots_pk_c(w, ots) + hsf * C_TH2
+    sg = C_HMSG + C_PRFMSG + wots_sign_c(w, ots)
     return {
         'hsf': hsf,
         'sz_q1': size(1),
         'sz_max': size(hsf),
-        'kg': (hsf + 1) * wots_pk_c(w, ots) + hsf * C_TH2,
-        'sg': C_HMSG + C_PRFMSG + wots_sign_c(w, ots),
+        'kg': kg,
+        'sg': sg,
+        'sg_cold': sg + kg,
         'sv_max': C_HMSG + wots_verify_c(w, ots, False) + hsf * C_TH2,
         'sv_max_worst': C_HMSG + wots_verify_c(w, ots, True) + hsf * C_TH2,
+        'state': (hsf + 1) * N, 
     }

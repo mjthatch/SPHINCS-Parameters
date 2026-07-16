@@ -124,7 +124,8 @@ def apply_sequential_filters(df, minimax_val, X):
         
     return history, newly_killed_indices_list
 
-def draw_sieve_stage(stage_index, pts, survived_indices, newly_killed_indices_list, filenames, winner_idx, df, euclidean_winner_idx):
+def draw_sieve_stage(stage_index, pts, survived_indices, newly_killed_indices_list, filenames, winner_idx, df, euclidean_winner_idx,
+                     label_override=None, annotate_indices=None):
     stages_meta = [
         {"title": "Image 1: Initial Pool (128-bit Secure)", "color": "white", "label": "Security", "filter_txt": "Initial Data"},
         {"title": r"Image 2: Filter Size", "color": "#a0c4ff", "label": "Size Sieve", "filter_txt": "Signature Size Sieve"},       
@@ -170,7 +171,7 @@ def draw_sieve_stage(stage_index, pts, survived_indices, newly_killed_indices_li
                 ax.text(x_origin_ref + x_offset + 1, 10 + y_offset + card_height - 3, label_txt, 
                         ha='left', va='top', fontsize=9, fontweight='bold', rotation=90, color='gray', alpha=0.9, zorder=zorder_val+1)
 
-    current_filter_text = stages_meta[stage_index]["filter_txt"]
+    current_filter_text = label_override or stages_meta[stage_index]["filter_txt"]
     ax.text(x_origin_ref, 10 + card_height + 1.5, f"{current_filter_text}",
             ha='left', va='bottom', fontsize=12, fontweight='bold', color='#2c3e50', zorder=20)
 
@@ -194,6 +195,16 @@ def draw_sieve_stage(stage_index, pts, survived_indices, newly_killed_indices_li
                 optimum_dist = df.loc[euclidean_winner_idx, 'weighted_dist']
                 optimum_color = sc.to_rgba(optimum_dist)
                 ax.scatter(euc_pt[0], euc_pt[1], color=optimum_color, marker='o', s=215, edgecolor='black', linewidth=2.0, zorder=15, label="The Best Candidate")
+
+            if annotate_indices:
+                for a_idx in annotate_indices:
+                    row = df.loc[a_idx]
+                    label = "({:.0f},{:.0f},{:.0f},{:.0f},{:.0f})".format(
+                        row['h'], row['d'], row['k'], row['a'], row['w'])
+                    pt = pts_mapped[a_idx]
+                    ax.annotate(label, xy=(pt[0], pt[1]), xytext=(pt[0] + 4, pt[1] + 4),
+                                fontsize=11, fontweight='bold', color='#2c3e50', zorder=16,
+                                arrowprops=dict(arrowstyle='-', color='#2c3e50', lw=0.8))
     else:
         if len(survived_indices) > 0:
             if winner_idx in survived_indices:
@@ -230,6 +241,15 @@ def main():
                         help="Distance weights: size,keygen,sign,verify,rho")
     parser.add_argument("--suffix", type=str, default="",
                         help="Suffix for the step-7 distance image filename")
+    parser.add_argument("--figure", choices=("sieve", "focus"), default="sieve",
+                        help="sieve: the full 7-stage sequence (default); "
+                             "focus: a single distance view of the final survivors")
+    parser.add_argument("--distance", choices=("regular", "normalized"), default="regular",
+                        help="Distance definition for --figure focus")
+    parser.add_argument("--out", type=str, default=None,
+                        help="Output filename for --figure focus")
+    parser.add_argument("--annotate", action="store_true",
+                        help="Label each survivor with its (h,d,k,a,w) tuple (focus mode)")
     args = parser.parse_args()
 
     X = {'size': args.x_size, 'keygen': args.x_kg, 'sign': args.x_sg,
@@ -273,12 +293,42 @@ def main():
         euclidean_winner_idx = None
         print("\n      -> No survivors left to calculate Euclidean optimum.")
 
+    if args.figure == "focus":
+        # Single distance view of the final survivors (replaces the manual
+        # site screenshots previously used for the report's comparison and
+        # candidate figures).
+        assert args.out, "--figure focus requires --out"
+        assert len(final_survivors) > 0, "no survivors under these filters"
+        label = "Regular Weighted Distance"
+        if args.distance == "normalized":
+            label = "Metric-Normalised Weighted Distance"
+            sub = df.loc[final_survivors]
+            acc = np.zeros(len(sub))
+            for col, wkey in (('size_X', 'size'), ('keygen_X', 'keygen'),
+                              ('sign_X', 'sign'), ('verify_X', 'verify'),
+                              ('rho_X', 'rho')):
+                m_i, M_i = sub[col].min(), sub[col].max()
+                span = (M_i - m_i) or 1.0
+                acc += norm_weights[wkey] * (((sub[col] - m_i) / span) ** 2)
+            df.loc[final_survivors, 'weighted_dist'] = np.sqrt(acc)
+        focus_winner = df.loc[final_survivors, 'weighted_dist'].idxmin()
+        wrow = df.loc[focus_winner]
+        print(f"      -> Focus winner ({args.distance}): "
+              f"(h={wrow['h']:.0f}, d={wrow['d']:.0f}, k={wrow['k']:.0f}, "
+              f"a={wrow['a']:.0f}, w={wrow['w']:.0f})")
+        annotate = list(final_survivors) if args.annotate else None
+        draw_sieve_stage(6, plane_points, final_survivors, [],
+                         [None] * 6 + [args.out], winner_idx, df, focus_winner,
+                         label_override=label, annotate_indices=annotate)
+        print(f"  [v] Compiled: {args.out}")
+        return
+
     filenames = [
-        "sieve_step1_initial.png", 
-        "sieve_step2_size.png",    
-        "sieve_step3_keygen.png",  
-        "sieve_step4_siggen.png",  
-        "sieve_step5_verify.png",  
+        "sieve_step1_initial.png",
+        "sieve_step2_size.png",
+        "sieve_step3_keygen.png",
+        "sieve_step4_siggen.png",
+        "sieve_step5_verify.png",
         "sieve_step6_rho.png",
         "sieve_step7_distance{}.png".format(args.suffix)
     ]

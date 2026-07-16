@@ -270,6 +270,25 @@
   .row-add:disabled { opacity: 0.4; cursor: not-allowed; }
   .row-add:disabled:hover { background: transparent; color: var(--text-soft); border-color: var(--border); }
 
+  /* Signer-mode selector (cached/BDS vs stateless-recompute) */
+  .signer-mode {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-soft);
+  }
+  .signer-mode select {
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--panel);
+  }
+  .signer-mode select:focus { outline: none; border-color: var(--accent); }
+
   @media (max-width: 600px) {
     body { padding: 12px; }
     h1 { font-size: 18px; }
@@ -297,14 +316,21 @@
     <div class="actions">
       <button class="btn" id="show-add">+ Add candidate</button>
       <button class="btn btn-ghost" id="reset-defaults">Reset to defaults</button>
-      <button class="btn btn-ghost" id="share-btn" title="Copy a link that reproduces the current comparison list, bounds, weights and sort">Copy shareable link</button>
+      <button class="btn btn-ghost" id="share-btn" title="Copy a link that reproduces the current comparison list, signer mode, bounds, weights and sort">Copy shareable link</button>
+      <label class="signer-mode" title="cached (BDS): the signer keeps tree state — amortised treehash updates per signature. stateless-recompute: no cached tree material, trees are rebuilt per signature. SLH-DSA is stateless by design, so its SigGen is identical in both modes.">
+        Signer:
+        <select id="signer-mode">
+          <option value="cached">cached (BDS state)</option>
+          <option value="cold">stateless-recompute</option>
+        </select>
+      </label>
     </div>
 
     <form class="add-form" id="add-form" hidden>
       <label>Scheme
         <select id="f-scheme">
           <option value="xmssmt">XMSS / XMSS-MT</option>
-          <option value="uxmss">UXMSS (right-skewed)</option>
+          <option value="uxmss">UXMSS (left-leaning)</option>
         </select>
       </label>
       <label>OTS family
@@ -334,9 +360,16 @@
     </form>
 
     <h2 style="margin-top: 20px;">Comparison table</h2>
-    <p class="hint">All cost columns are SHA-256 compression-function calls. Cost ratios under each value compare against SLH-DSA-128s.
-      UXMSS signatures grow with the signature index q: the size column shows the q=1 → q=hsf range, and all
-      ratios, filters and verification costs use the worst case (q = hsf).</p>
+    <p class="hint">All cost columns are SHA-256 compression-function calls with the PK.seed block midstate-cached
+      (FIPS 205 SHA-2 layout; the original uncached convention remains available in the scripts via
+      <code>HASH_CONVENTION=uncached</code>). Cost ratios under each value compare against SLH-DSA-128s.
+      UXMSS signatures grow with the signature index: the size column shows the first→largest range, and all
+      ratios, filters and verification costs use the worst case (hsf auth nodes, reached by the last two of
+      the hsf+1 signatures).
+      The <strong>Signer</strong> selector switches SigGen between the cached signer (BDS-amortised, tree state
+      kept between signatures) and a state-minimized signer that rebuilds its trees per signature.
+      <strong>State</strong> shows the cached signer's memory — UXMSS: all hsf+1 leaf hashes;
+      XMSS/XMSS-MT: a BDS-style estimate; "—" for the stateless SLH-DSA baseline and in state-minimized mode.</p>
     <div class="compare-wrap">
       <table class="compare" id="compare-table"></table>
     </div>
@@ -347,6 +380,7 @@
     <p class="hint">
       Pre-swept over h = [10, 40], d = [1, 10] (with d ⏐ h), OTS = {WOTS, WOTS+C}, w = {16, 32, 256},
       plus the 6 UXMSS variants (2 OTS * 3 w). Every candidate has signature size strictly smaller than SLH-DSA-128s.
+      UXMSS tree height is capped at hsf = 255.
       Tighten the bounds to narrow the pool; click a row's <strong>+</strong> to add it to the comparison above.
     </p>
 
@@ -382,9 +416,12 @@
 const N = 16;                 // hashbytes
 const C_SIZE = 4;             // counter_size (WOTS+C grinding counter)
 const R_SIZE = 16;            // randomness_size = n (matches costs.sage; SLH-DSA R is n bytes)
+// Cached hash convention (matches costs.sage defaults): PK.seed midstate
+// cached per keypair, so a 2-child node hash costs 1 compression
+// (ADRS_c 22 B + 32 B + padding = 497 bits). Hmsg/PRFmsg stay at 2.
 const C_Th1 = 1;
 const C_Th1c = 1;
-const C_Th2 = 2;
+const C_Th2 = 1;
 const C_Hmsg = 2;
 const C_PRFmsg = 2;
 const C_PRF = 1;
@@ -398,7 +435,7 @@ const SLH = { h: 63, d: 7, k: 14, a: 12, w: 16 };
 
 //  Helpers 
 function idxBytes(h) { return Math.max(1, Math.ceil(h / 8)); }
-function computeTh(n) { return Math.ceil((128 + 96 + 128 * n + 65) / 512); }
+function computeTh(n) { return Math.ceil((176 + 128 * n + 65) / 512); }   // cached: ADRS_c 22 B + payload
 
 //  WOTS+ family 
 function wotsL(w, ots) {
@@ -503,11 +540,25 @@ function xmssMtSignBdsC(h, d, w, swn, ots) {
   const cSg = wotsSignC(w, swn, ots);
   return C_Hmsg + C_PRFmsg + cSg + d * (hPrime * pk + hPrime * C_Th2);
 }
+function xmssMtSignColdC(h, d, w, swn, ots) {
+  // State-minimized signer: rebuild d trees of height h' per signature.
+  return C_Hmsg + C_PRFmsg + d * (treeKeygenC(h / d, w, ots) + wotsSignC(w, swn, ots));
+}
+function xmssMtStateBytes(h, d, w, ots) {
+  // BDS-style cached-signer state estimate: ~3.5*h' nodes per layer.
+  const hPrime = h / d;
+  return d * Math.ceil(3.5 * hPrime) * N + (d - 1) * wotsL(w, ots) * N;
+}
+function uxmssStateBytes(hsf) {
+  // Cached signer keeps all hsf+1 leaf hashes.
+  return (hsf + 1) * N;
+}
 function xmssMtVerifyC(h, d, w, swn, ots, worstCase) {
   return C_Hmsg + d * treeVerifyC(h / d, w, swn, ots, worstCase);
 }
 
-//  UXMSS (right-skewed) 
+//  UXMSS (left-leaning)
+const HSF_MAX = 255; 
 function uxmssIdxBytes(hsf) {
   if (hsf <= 0) return 1;
   return Math.max(1, Math.ceil(Math.log2(hsf + 1) / 8));
@@ -519,7 +570,7 @@ function findMaxHsf(w, ots, targetSize) {
   for (let i = 0; i < 64; i++) {
     const idx = uxmssIdxBytes(hsf);
     const avail = targetSize - 1 - R_SIZE - ctr - l * N - idx;
-    const newHsf = Math.max(0, Math.floor(avail / N));
+    const newHsf = Math.max(0, Math.min(Math.floor(avail / N), HSF_MAX));
     if (newHsf === hsf) return hsf;
     hsf = newHsf;
   }
@@ -542,8 +593,8 @@ function uxmssVerifyC(q, hsf, w, swn, ots, worstCase) {
 
 //  SLH-DSA (stateless, FORS + WOTS-TW + hyper-tree)
 // Exact compression-call model — same formulas as index.html metrics() and
-// costs.sage. Baseline SLH-DSA-128s: size 7856 B, KeyGen 292,862 C,
-// SigGen 2,279,391 C, SigVer 2,387 C (avg) / 4,123 C (worst-case WOTS-TW).
+// costs.sage (cached convention). Baseline SLH-DSA-128s: size 7856 B,
+// KeyGen 292,351 C, SigGen 2,218,483 C, SigVer 2,155 C (avg) / 3,891 C (worst).
 function slhMetrics(p) {
   const hp = p.h / p.d;
   const l1 = Math.ceil(8 * N / Math.log2(p.w));
@@ -597,6 +648,7 @@ function buildSLH() {
       size: s ? s.size : m.size,
       keygen: s ? s.kg : m.kg,
       siggen: s ? s.sg : m.sg,
+      siggenCold: s ? s.sg : m.sg,
       sigver: s ? s.sv : m.sv,
       sigverWorst: s ? s.sv_worst : m.svWorst,
       // FIPS 205 capacity for SLH-DSA-128s is 2^64 signatures; the report
@@ -619,6 +671,8 @@ function buildXmssMt(ots, h, d, w) {
       size: xmssMtSize(h, d, w, ots),
       keygen: xmssMtKeygenC(h, d, w, ots),
       siggen: xmssMtSignBdsC(h, d, w, swn, ots),
+      siggenCold: xmssMtSignColdC(h, d, w, swn, ots),
+      state: xmssMtStateBytes(h, d, w, ots),
       sigver: xmssMtVerifyC(h, d, w, swn, ots, false),
       sigverWorst: xmssMtVerifyC(h, d, w, swn, ots, true),
       qsLog2: h,
@@ -637,16 +691,19 @@ function buildUxmss(ots, w) {
     scheme: 'UXMSS',
     canRemove: true,
     hsf,
-    sub: `sig grows with q — worst case (q = hsf = ${hsf}) shown`,
+    sub: `sig grows with index — worst case shown (${hsf} auth nodes); capacity ${hsf + 1} sigs`,
     metrics: {
-      // UXMSS signatures grow with the signature index q: the q-th signature
-      // carries min(q, hsf) auth nodes. The binding design constraint is the
-      // WORST case (q = hsf), matching sz_max / verify_max_* in stateful.sage;
-      // sizeQ1 keeps the best case (q = 1) for the range display.
+      // UXMSS signatures grow with the signature index: the signature with
+      // index i \in (1...hsf+1) carries min(i, hsf) auth nodes, so the last two
+      // are the largest. The binding design constraint is that worst case,
+      // matching sz_max / verify_max_* in stateful.sage; sizeQ1 keeps the
+      // first-signature size for the range display.
       size: uxmssSize(hsf, hsf, w, ots),
       sizeQ1: uxmssSize(1, hsf, w, ots),
       keygen: uxmssKeygenC(hsf, w, ots),
       siggen: uxmssSignC(w, swn, ots),
+      siggenCold: uxmssSignC(w, swn, ots) + uxmssKeygenC(hsf, w, ots),
+      state: uxmssStateBytes(hsf),
       sigver: uxmssVerifyC(hsf, hsf, w, swn, ots, false),
       sigverWorst: uxmssVerifyC(hsf, hsf, w, swn, ots, true),
       qsLog2: null,
@@ -662,6 +719,10 @@ function buildUxmss(ots, w) {
 // the loaded data at startup.
 let SITE_DATA = null;
 
+// Signer mode: 'cached' or 'cold'. Affects SigGen only.
+let SIGNER_MODE = 'cached';
+function sigGenOf(m) { return SIGNER_MODE === 'cold' ? m.siggenCold : m.siggen; }
+
 function candFromXmssMtRec(rec, idx) {
   const [ots, h, d, w] = [rec[idx.ots], rec[idx.h], rec[idx.d], rec[idx.w]];
   return {
@@ -672,6 +733,7 @@ function candFromXmssMtRec(rec, idx) {
     canRemove: true,
     metrics: {
       size: rec[idx.size], keygen: rec[idx.kg], siggen: rec[idx.sg],
+      siggenCold: rec[idx.sg_cold], state: rec[idx.state],
       sigver: rec[idx.sv], sigverWorst: rec[idx.sv_worst],
       qsLog2: h, qsExact: null,
     },
@@ -687,10 +749,11 @@ function candFromUxmssRec(rec, idx) {
     scheme: 'UXMSS',
     canRemove: true,
     hsf,
-    sub: `sig grows with q — worst case (q = hsf = ${hsf}) shown`,
+    sub: `sig grows with index — worst case shown (${hsf} auth nodes); capacity ${hsf + 1} sigs`,
     metrics: {
       size: rec[idx.sz_max], sizeQ1: rec[idx.sz_q1],
       keygen: rec[idx.kg], siggen: rec[idx.sg],
+      siggenCold: rec[idx.sg_cold], state: rec[idx.state],
       sigver: rec[idx.sv_max], sigverWorst: rec[idx.sv_max_worst],
       qsLog2: null, qsExact: hsf + 1,
     },
@@ -717,6 +780,7 @@ function selfCheckStateful(data) {
     const r = xrows[i];
     const c = buildXmssMt(r[xi.ots], r[xi.h], r[xi.d], r[xi.w]).metrics;
     if (c.size !== r[xi.size] || c.keygen !== r[xi.kg] || c.siggen !== r[xi.sg] ||
+        c.siggenCold !== r[xi.sg_cold] || c.state !== r[xi.state] ||
         c.sigver !== r[xi.sv] || c.sigverWorst !== r[xi.sv_worst]) {
       bad++; console.error('data.json XMSS-MT row disagrees with local formulas:', r, c);
     }
@@ -725,7 +789,8 @@ function selfCheckStateful(data) {
   for (const r of data.stateful.uxmss.rows) {
     const c = buildUxmss(r[ui.ots], r[ui.w]).metrics;
     if (c.size !== r[ui.sz_max] || c.sizeQ1 !== r[ui.sz_q1] || c.keygen !== r[ui.kg] ||
-        c.siggen !== r[ui.sg] || c.sigver !== r[ui.sv_max] || c.sigverWorst !== r[ui.sv_max_worst]) {
+        c.siggen !== r[ui.sg] || c.siggenCold !== r[ui.sg_cold] || c.state !== r[ui.state] ||
+        c.sigver !== r[ui.sv_max] || c.sigverWorst !== r[ui.sv_max_worst]) {
       bad++; console.error('data.json UXMSS row disagrees with local formulas:', r, c);
     }
   }
@@ -787,7 +852,9 @@ const state = { candidates: [] };   // filled by init() once data.json is resolv
 const METRIC_COLS = [
   { label: 'Sig size',    value: m => fmtSize(m),                                  ratioField: 'size',    lowerIsBetter: true },
   { label: 'KeyGen (C)',  value: m => fmtCompressions(m.keygen),                   ratioField: 'keygen',  lowerIsBetter: true },
-  { label: 'SigGen (C)',  value: m => fmtCompressions(m.siggen),                   ratioField: 'siggen',  lowerIsBetter: true },
+  { label: () => `SigGen (C, ${SIGNER_MODE === 'cold' ? 'cold' : 'BDS'})`,
+                          value: m => fmtCompressions(sigGenOf(m)),                ratioFn: m => sigGenOf(m), lowerIsBetter: true },
+  { label: 'State (B)',   value: m => (SIGNER_MODE === 'cold' || m.state === undefined) ? '—' : fmtBytes(m.state) },
   { label: 'SigVer (C)',  value: m => fmtCompressions(m.sigver),                   ratioField: 'sigver',  lowerIsBetter: true },
   { label: 'C/B (avg)',   value: m => fmtCpb(m.sigver / m.size),                   ratioFn: m => (m.sigver      / m.size),  lowerIsBetter: true },
   { label: 'C/B (worst)', value: m => fmtCpb(m.sigverWorst / m.size),              ratioFn: m => (m.sigverWorst / m.size),  lowerIsBetter: true },
@@ -807,7 +874,10 @@ function renderComparison() {
   // Header: candidate column + one column per metric + actions
   const thead = document.createElement('thead');
   let hr = '<tr><th class="cand-col">Candidate</th>';
-  for (const col of METRIC_COLS) hr += `<th>${col.label}</th>`;
+  for (const col of METRIC_COLS) {
+    const lbl = typeof col.label === 'function' ? col.label() : col.label;
+    hr += `<th>${lbl}</th>`;
+  }
   hr += '<th class="act-col"></th></tr>';
   thead.innerHTML = hr;
 
@@ -972,7 +1042,7 @@ function sweepRatios(m, std) {
   return {
     size: m.size / std.size,
     kg:   m.keygen / std.keygen,
-    sg:   m.siggen / std.siggen,
+    sg:   sigGenOf(m) / sigGenOf(std),
     sv:   m.sigver / std.sigver,
     cb:   (m.sigver / m.size) / (std.sigver / std.size),
   };
@@ -1065,7 +1135,10 @@ function renderSweepFilters() {
 const SWEEP_COLS = [
   { field: 'size',     label: 'Sig size',   value: m => fmtSize(m),                             sortFn: (m) => m.size,                                                  ratioFn: m => m.size,             lowerIsBetter: true },
   { field: 'keygen',   label: 'KeyGen (C)', value: m => fmtCompressions(m.keygen),              sortFn: (m) => m.keygen,                                                ratioFn: m => m.keygen,           lowerIsBetter: true },
-  { field: 'siggen',   label: 'SigGen (C)', value: m => fmtCompressions(m.siggen),              sortFn: (m) => m.siggen,                                                ratioFn: m => m.siggen,           lowerIsBetter: true },
+  { field: 'siggen',   label: () => `SigGen (C, ${SIGNER_MODE === 'cold' ? 'cold' : 'BDS'})`,
+                                            value: m => fmtCompressions(sigGenOf(m)),           sortFn: (m) => sigGenOf(m),                                             ratioFn: m => sigGenOf(m),        lowerIsBetter: true },
+  { field: 'state',    label: 'State (B)',  value: m => (SIGNER_MODE === 'cold' || m.state === undefined) ? '—' : fmtBytes(m.state),
+                                                                                                sortFn: (m) => m.state || 0 },
   { field: 'sigver',   label: 'SigVer (C)', value: m => fmtCompressions(m.sigver),              sortFn: (m) => m.sigver,                                                ratioFn: m => m.sigver,           lowerIsBetter: true },
   { field: 'cb',       label: 'C/B (avg)',  value: m => fmtCpb(m.sigver / m.size),              sortFn: (m) => m.sigver / m.size,                                       ratioFn: m => m.sigver / m.size,  lowerIsBetter: true },
   { field: 'distance', label: 'Distance',   value: (m, c, std) => sweepDistance(m, std, sweepState.W).toFixed(4),
@@ -1079,10 +1152,10 @@ function renderSweepTable() {
   const survivors = [];
   for (const f of SWEEP_FACTORIES) {
     const m = f.cached.metrics;
-    if (m.size      >  sweepState.X.size * std.size)   continue;
-    if (m.keygen    >  sweepState.X.kg   * std.keygen) continue;
-    if (m.siggen    >  sweepState.X.sg   * std.siggen) continue;
-    if (m.sigver    >  sweepState.X.sv   * std.sigver) continue;
+    if (m.size        >  sweepState.X.size * std.size)        continue;
+    if (m.keygen      >  sweepState.X.kg   * std.keygen)      continue;
+    if (sigGenOf(m)   >  sweepState.X.sg   * sigGenOf(std))   continue;
+    if (m.sigver      >  sweepState.X.sv   * std.sigver)      continue;
     const cbTarget = m.sigver / m.size;
     const cbStd    = std.sigver / std.size;
     if (cbTarget   >  sweepState.X.cb   * cbStd)       continue;
@@ -1123,7 +1196,8 @@ function renderSweepTable() {
   for (const col of SWEEP_COLS) {
     const isActive = sweepState.sort.col === col.field;
     const arrow = isActive ? (sweepState.sort.dir === 'asc' ? '▲' : '▼') : '';
-    hr += `<th class="sortable${isActive ? ' active' : ''}" data-sort="${col.field}">${col.label}<span class="sort-arrow">${arrow}</span></th>`;
+    const lbl = typeof col.label === 'function' ? col.label() : col.label;
+    hr += `<th class="sortable${isActive ? ' active' : ''}" data-sort="${col.field}">${lbl}<span class="sort-arrow">${arrow}</span></th>`;
   }
   hr += '<th class="act-col"></th></tr>';
   thead.innerHTML = hr;
@@ -1233,6 +1307,7 @@ function writeStatefulHash() {
     parts.push('w=' + HASH_W_KEYS.map(k => sweepState.W[k]).join(','));
   if (sweepState.sort.col !== 'distance' || sweepState.sort.dir !== 'asc')
     parts.push('sort=' + sweepState.sort.col + '.' + sweepState.sort.dir);
+  if (SIGNER_MODE !== 'cached') parts.push('m=' + SIGNER_MODE);
   history.replaceState(null, '',
     parts.length ? '#' + parts.join('&') : location.pathname + location.search);
 }
@@ -1267,6 +1342,7 @@ function applyStatefulHash() {
     if (SWEEP_COLS.some(c => c.field === col) && ['asc', 'desc'].includes(dir))
       sweepState.sort = { col, dir };
   }
+  if (params.m === 'cold') SIGNER_MODE = 'cold';
   if (params.cand !== undefined) {
     const seen = new Set();
     const cands = [];
@@ -1282,15 +1358,19 @@ function applyStatefulHash() {
 
 function exportSweepCSV() {
   const std = state.candidates[0].metrics;
-  const header = ['scheme', 'label', 'max_sigs', 'size_B', 'keygen_C', 'siggen_C',
-    'sigver_C', 'sigver_worst_C', 'c_per_byte', 'c_per_byte_worst', 'distance'];
+  const header = ['scheme', 'label', 'max_sigs', 'size_B', 'keygen_C',
+    'siggen_bds_C', 'siggen_cold_C', 'state_B',
+    'sigver_C', 'sigver_worst_C', 'c_per_byte', 'c_per_byte_worst',
+    'signer_mode', 'distance'];
   const lines = [header.join(',')];
   for (const f of sweepState.lastSurvivors) {
     const c = f.cached, m = c.metrics;
     lines.push([c.scheme, '"' + c.label + '"',
       m.qsLog2 !== null ? '2^' + m.qsLog2 : m.qsExact,
-      m.size, m.keygen, m.siggen, m.sigver, m.sigverWorst,
+      m.size, m.keygen, m.siggen, m.siggenCold, m.state !== undefined ? m.state : '',
+      m.sigver, m.sigverWorst,
       (m.sigver / m.size).toFixed(6), (m.sigverWorst / m.size).toFixed(6),
+      SIGNER_MODE,
       sweepDistance(m, std, sweepState.W).toFixed(6)].join(','));
   }
   const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv' });
@@ -1411,7 +1491,12 @@ async function init() {
   SITE_DATA = await loadSiteData();
   if (SITE_DATA) selfCheckStateful(SITE_DATA);
   state.candidates = defaultCandidates();
-  applyStatefulHash();   // may replace the comparison list, bounds, weights, sort
+  applyStatefulHash();
+  document.getElementById('signer-mode').value = SIGNER_MODE;
+  document.getElementById('signer-mode').addEventListener('change', e => {
+    SIGNER_MODE = e.target.value === 'cold' ? 'cold' : 'cached';
+    render();
+  });
   setupAddForm();
   render();              // initial pass paints the comparison
   buildSweepPool();      // sweep generation depends on the SLH baseline

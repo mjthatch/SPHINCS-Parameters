@@ -140,8 +140,9 @@ def sweep_scheme(scheme):
 pools = {}
 if 'SPX' in schemes:
     pairs = _hd_pairs()
-    spx_considered = len(pairs) * len(GRID['w']) \
-        * (GRID['k'][1] - GRID['k'][0] + 1) * (GRID['a'][1] - GRID['a'][0] + 1)
+    spx_considered = (len(pairs) * len(GRID['w'])
+                      * (GRID['k'][1] - GRID['k'][0] + 1)
+                      * (GRID['a'][1] - GRID['a'][0] + 1))
     pools['SPX'] = {'fields': POOL_FIELDS, 'considered': spx_considered,
                     'count': len(spx_rows), 'rows': spx_rows}
     print("SPX: {} rows (from CSV)".format(len(spx_rows)), file=sys.stderr)
@@ -173,6 +174,8 @@ for ots_label, ots_type in (('TW', OTS_TW), ('WC', OTS_WC)):
                     int(xmssmt_size_h(h, d, w, ots_type)),
                     int(xmssmt_keygen_C_h(h, d, w, ots_type)),
                     int(xmssmt_sign_bds_C_h(h, d, w, swn, ots_type)),
+                    int(xmssmt_sign_cold_C_h(h, d, w, swn, ots_type)),
+                    int(xmssmt_state_bytes(h, d, w, ots_type)),
                     int(xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=False)),
                     int(xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=True)),
                 ])
@@ -188,6 +191,8 @@ for ots_label, ots_type in (('TW', OTS_TW), ('WC', OTS_WC)):
             int(uxmss_size(hsf, hsf, w, ots_type)),
             int(uxmss_keygen_C(hsf, w, ots_type)),
             int(uxmss_sign_C(1, hsf, w, swn, ots_type)),
+            int(uxmss_sign_cold_C(hsf, w, swn, ots_type)),
+            int(uxmss_state_bytes(hsf)),
             int(uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=False)),
             int(uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=True)),
         ])
@@ -204,7 +209,7 @@ def _commit():
 
 data = {
     'meta': {
-        'version': 2,
+        'version': 3,
         'generator': 'export_site_data.sage',
         'generated': datetime.date.today().isoformat(),
         'commit': _commit(),
@@ -212,6 +217,8 @@ data = {
         'wc_pairs': WC_PAIRS,
         'schemes': [s for s in ALL_SCHEMES if s in pools],
         'uxmss_ref_size': UXMSS_REF,
+        'hsf_max': int(HSF_MAX),
+        'cost_convention': HASH_CONVENTION,
     },
     'baseline': baseline,
     'pools': pools,
@@ -220,12 +227,13 @@ data = {
                 'sg': baseline['sg'], 'sv': baseline['sv'],
                 'sv_worst': baseline['sv_worst'], 'qs_log2': 64},
         'xmssmt': {
-            'fields': ['ots', 'h', 'd', 'w', 'size', 'kg', 'sg', 'sv', 'sv_worst'],
+            'fields': ['ots', 'h', 'd', 'w', 'size', 'kg', 'sg', 'sg_cold',
+                       'state', 'sv', 'sv_worst'],
             'rows': xmssmt_rows,
         },
         'uxmss': {
             'fields': ['ots', 'w', 'hsf', 'sz_q1', 'sz_max', 'kg', 'sg',
-                       'sv_max', 'sv_max_worst'],
+                       'sg_cold', 'state', 'sv_max', 'sv_max_worst'],
             'rows': uxmss_rows,
         },
     },

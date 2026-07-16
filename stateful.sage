@@ -17,12 +17,12 @@ signature-count targets: 2^20 and 2^40.
    - No FORS/FTS needed: state prevents replay attacks.
    - Signature size grows with d (more layers → more XMSS layer sigs).
 
-3. SHRINCS/UXMSS: Right-skewed unbalanced Merkle tree (SHRINCS stateful)
-   - Right-skewed tree with hsf+1 leaves;
-   - q-th sig includes min(q,hsf) auth nodes.
-   - Signature size grows linearly with q (unlike XMSS-MT which is constant).
-   - Target is strictly isolated to 2^40 signatures, hardcoded to use 
-     Candidate 2 (5,712 bytes) as the reference bound for max stateful size.
+3. SHRINCS/UXMSS: Left-leaning unbalanced Merkle tree (SHRINCS stateful)
+   - Tree of height hsf with hsf+1 leaves; capacity = hsf + 1 signature.
+   - The signature with index i \in (1...hsf+1) carries min(i, hsf) auth nodes.
+   - Signature size grows linearly with the index (XMSS-MT: constant).
+   - Target is strictly isolated to 2^40 signatures, hardcoded to use (5,712 bytes) as the reference bound.
+   - hsf is additionally capped at 255.
 
 OTS variants:
   WOTS-classic  Original Winternitz OTS; no tweaks; l = l1 + l2 chains.
@@ -42,9 +42,11 @@ w values: 16, 32, 256.
   division is exact; for w=32 we need 26 chains (not 25) to cover the
   full 128-bit message digest.
 
-SHA-256 compression model (same convention as costs.sage):
-  C_Th1=1  C_Th2=2  C_PRF=1  C_Th1c=1  C_Hmsg=2  C_PRFmsg=2
-  Thl_tw(l) = ceil((289+128*l)/512)   Thl_classic(l) = ceil((65+128*l)/512)
+SHA-256 compression model: inherited from costs.sage, governed by the
+HASH_CONVENTION env var ('cached' default: PK.seed midstate cached, C_Th2=1,
+Thl_tw(l) = ceil((241+128*l)/512); 'uncached' original: C_Th2=2,
+Thl_tw(l) = ceil((289+128*l)/512)). Always: C_Th1=1 C_Th1c=1 C_PRF=1
+C_Hmsg=2 C_PRFmsg=2; Thl_classic(l) = ceil((65+128*l)/512) (plain SHA-256).
 
 Usage:
   sage stateful.sage                     # Tables for both 2^20 and 2^40
@@ -257,7 +259,8 @@ def compute_xmss_rows(h):
             size     = xmss_size_h(h, w, ots_type),
             keygen_C = xmss_keygen_C_h(h, w, ots_type),
             sign_C   = xmss_sign_C_h(h, w, swn, ots_type),
-            sign_cold_C = float("nan"),
+            sign_cold_C = xmssmt_sign_cold_C_h(h, 1, w, swn, ots_type),
+            state_bytes = xmssmt_state_bytes(h, 1, w, ots_type),
             verify_avg_C   = xmss_verify_C_h(h, w, swn, ots_type, worst_case=False),
             verify_worst_C = xmss_verify_C_h(h, w, swn, ots_type, worst_case=True),
         ))
@@ -309,6 +312,7 @@ def compute_xmssmt_rows(h):
                 keygen_C = xmssmt_keygen_C_h(h, d, w, ots_type),
                 sign_C   = xmssmt_sign_bds_C_h(h, d, w, swn, ots_type),
                 sign_cold_C = xmssmt_sign_cold_C_h(h, d, w, swn, ots_type),
+                state_bytes = xmssmt_state_bytes(h, d, w, ots_type),
                 verify_avg_C   = xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=False),
                 verify_worst_C = xmssmt_verify_C_h(h, d, w, swn, ots_type, worst_case=True),
             ))
@@ -321,8 +325,11 @@ def _uxmss_idx_bytes(hsf):
     return max(1, int(ceil(log(hsf + 1, 2) / 8)))
 
 
+HSF_MAX = 255   # FXMSS encodes the node height as a single byte
+
 def find_max_hsf(w, ots_type, target_size):
-    """Return the largest hsf such that uxmss_size(*, hsf, ...) is strictly < target_size.
+    """Largest hsf with the max UXMSS signature strictly < target_size,
+    capped at HSF_MAX = 255.
 
     Because idx_bytes depends on hsf, we use a small fixed-point loop.
     """
@@ -333,7 +340,7 @@ def find_max_hsf(w, ots_type, target_size):
     for _ in range(64):
         idx = _uxmss_idx_bytes(hsf)
         avail = target_size - 1 - R_SIZE - ctr - l * N - idx
-        new_hsf = max(0, int(avail // N))
+        new_hsf = max(0, min(int(avail // N), HSF_MAX))
         if new_hsf == hsf:
             return hsf
         hsf = new_hsf
@@ -351,8 +358,28 @@ def uxmss_keygen_C(hsf, w, ots_type):
 
 
 def uxmss_sign_C(q, hsf, w, swn, ots_type):
+    """Cached signer: the full tree is kept as state, auth nodes are lookups."""
     return float(C_Hmsg + C_PRFmsg + wots_sign_C(w, swn, ots_type))
 
+
+def uxmss_sign_cold_C(hsf, w, swn, ots_type):
+    """State-minimal signer: rebuild all leaves to derive the auth path, then sign."""
+    return float(C_Hmsg + C_PRFmsg + wots_sign_C(w, swn, ots_type)
+                 + uxmss_keygen_C(hsf, w, ots_type))
+
+
+def uxmss_state_bytes(hsf):
+    """Cached-signer state: all hsf+1 leaf hashes"""
+    return int((hsf + 1) * N)
+
+
+def xmssmt_state_bytes(h, d, w, ots_type):
+    """BDS-style cached-signer state estimate: ~3.5*h' nodes per layer plus the cached
+    upper-layer WOTS signatures. See Buchmann-Dahmen-Schneider,
+    'Merkle Tree Traversal Revisited'."""
+    h_prime = h // d
+    l = wots_l(w, ots_type)
+    return int(d * ceil(3.5 * h_prime) * N + (d - 1) * l * N)
 
 def uxmss_verify_C(q, hsf, w, swn, ots_type, worst_case=False):
     return float(C_Hmsg + wots_verify_C(w, swn, ots_type, worst_case) + min(q, hsf) * C_Th2)
@@ -375,6 +402,8 @@ def compute_uxmss_rows(target_size, q_s_log2):
             sz_max       = uxmss_size(hsf, hsf, w, ots_type),
             keygen_C     = uxmss_keygen_C(hsf, w, ots_type),
             sign_q1_C    = uxmss_sign_C(1,   hsf, w, swn, ots_type),
+            sign_cold_C  = uxmss_sign_cold_C(hsf, w, swn, ots_type),
+            state_bytes  = uxmss_state_bytes(hsf),
             verify_max_avg_C   = uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=False),
             verify_max_worst_C = uxmss_verify_C(hsf, hsf, w, swn, ots_type, worst_case=True),
         ))
@@ -386,7 +415,8 @@ _CSV_HEADER = [
     "scheme", "q_s_log2", "h_total", "d", "h_prime",
     "ots_type", "w", "swn", "l",
     "size_bytes",
-    "keygen_C", "sign_bds_C", "sign_cold_C", "verify_avg_C", "verify_worst_C",
+    "keygen_C", "sign_bds_C", "sign_cold_C", "state_bytes",
+    "verify_avg_C", "verify_worst_C",
     "ref_size", "hsf", "num_sigs",
     "sz_q1", "sz_max", "sign_q1_C", "verify_max_avg_C", "verify_max_worst_C",
 ]
@@ -405,7 +435,8 @@ def _xmss_csv_row(r):
             r['ots_type'], r['w'], r['swn'], r['l'],
             r['size'],
             _fmt_f(r['keygen_C']), _fmt_f(r['sign_C']),
-            _fmt_f(r['sign_cold_C']), _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
+            _fmt_f(r['sign_cold_C']), r['state_bytes'],
+            _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
             "", "", "", "", "", "", "", ""]
 
 
@@ -414,7 +445,8 @@ def _xmssmt_csv_row(r):
             r['ots_type'], r['w'], r['swn'], r['l'],
             r['size'],
             _fmt_f(r['keygen_C']), _fmt_f(r['sign_C']),
-            _fmt_f(r['sign_cold_C']), _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
+            _fmt_f(r['sign_cold_C']), r['state_bytes'],
+            _fmt_f(r['verify_avg_C']), _fmt_f(r['verify_worst_C']),
             "", "", "", "", "", "", "", ""]
 
 
@@ -422,7 +454,7 @@ def _uxmss_csv_row(r):
     return [r['scheme'], r['q_s_log2'], "", "", "",
             r['ots_type'], r['w'], r['swn'], r['l'],
             "",
-            _fmt_f(r['keygen_C']), "", "", "", "",
+            _fmt_f(r['keygen_C']), "", _fmt_f(r['sign_cold_C']), r['state_bytes'], "", "",
             r['ref_size'], r['hsf'], r['nsig'],
             r['sz_q1'], r['sz_max'],
             _fmt_f(r['sign_q1_C']), _fmt_f(r['verify_max_avg_C']), _fmt_f(r['verify_max_worst_C'])]
@@ -548,7 +580,7 @@ def print_uxmss_table(rows_by_h, refs):
     W = sum(c[1] for c in cols) + len(cols) - 1
     print()
     print("="*W)
-    print(" SHRINCS/UXMSS — Right-skewed Stateful Tree ".center(W, "="))
+    print(" SHRINCS/UXMSS — Left-leaning Stateful Tree ".center(W, "="))
     print(" OTS: WOTS-classic / WOTS-TW / WOTS+C  |  w ∈ {16,32,256} ".center(W, "="))
     print(" max stateful sig must be strictly < Ref ".center(W, "="))
     print("="*W)
