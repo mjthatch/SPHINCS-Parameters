@@ -19,7 +19,7 @@ signature-count targets: 2^20 and 2^40.
 
 3. SHRINCS/UXMSS: Left-leaning unbalanced Merkle tree (SHRINCS stateful)
    - Tree of height hsf with hsf+1 leaves; capacity = hsf + 1 signature.
-   - The signature with index i \in (1...hsf+1) carries min(i, hsf) auth nodes.
+   - The signature with index i in 1..hsf+1 carries min(i, hsf) auth nodes.
    - Signature size grows linearly with the index (XMSS-MT: constant).
    - Target is strictly isolated to 2^40 signatures, hardcoded to use (5,712 bytes) as the reference bound.
    - hsf is additionally capped at 255.
